@@ -100,13 +100,19 @@ function Read-xWebsite()
 
         foreach($binding in $website.Bindings.Collection)
         {
-            $currentBinding = "MSFT_xWebBindingInformation`r`n" `
-                + "{`r`n" `
-                + "    Protocol = `"" + $binding.Protocol + "`";`r`n" `
-                + "    Port = " + $binding.BindingInformation + ";`r`n" `
-                + "    CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n" `
-                + "    CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n" `
-                + "}"
+            $currentBinding = "`r`n                MSFT_xWebBindingInformation`r`n" `
+                + "                {`r`n" `
+                + "                    Protocol = `"" + $binding.Protocol + "`";`r`n" `
+                + "                    Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
+            if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
+            {
+                $currentBinding += "                    CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
+            }
+            if($null -ne $binding.CertificateStoreName -and "" -ne $binding.CertificateStoreName)
+            {
+                $currentBinding += "                    CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"
+            }
+            $currentBinding += "                }"
 
             $results.BindingInfo += $currentBinding
         }
@@ -123,7 +129,7 @@ function Read-xWebsite()
 function Set-ConfigurationData
 {
     $Script:dscConfigContent += "`$ConfigData = @{`r`n"
-    $Script:dscConfigContent += "    AllNodes = @(`r`n"    
+    $Script:dscConfigContent += "    AllNodes = @(`r`n"
 
     $tempConfigDataContent += "    @{`r`n"
     $tempConfigDataContent += "        NodeName = `"$env:COMPUTERNAME`";`r`n"
