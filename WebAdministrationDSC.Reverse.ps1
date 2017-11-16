@@ -36,7 +36,7 @@ $Script:dscConfigContent = "" # Core Variable that will contain the content of y
 $DSCSource = "C:\Program Files\WindowsPowerShell\Modules\xWebAdministration\" # Path to the root folder of your technology's DSC Module (e.g. C:\Program Files\WindowsPowerShell\SharePointDSC);
 $DSCVersion = "1.18.0.0" # Version of the DSC module for the technology (e.g. 1.0.0.0);
 $Script:DSCPath = $DSCSource + $DSCVersion # Dynamic path to include the version number as a folder;
-$Script:configName = "[**ConfigName]" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
+$Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
 
 <# Retrieves Information about the current script from the PSScriptInfo section above #>
 try {
@@ -117,9 +117,41 @@ function Read-xWebsite()
             $results.BindingInfo += $currentBinding
         }
 
+        $AuthenticationInfo = "`r`n                MSFT_xWebAuthenticationInformation`r`n                {`r`n"
+        
+        $prop = Get-WebConfigurationProperty `
+        -Filter /system.WebServer/security/authentication/BasicAuthentication `
+        -Name enabled `
+        -Location $website.Name
+
+        $AuthenticationInfo += "                    Basic = `$" + $prop.Value + ";`r`n"
+
+        $prop = Get-WebConfigurationProperty `
+        -Filter /system.WebServer/security/authentication/AnonymousAuthentication `
+        -Name enabled `
+        -Location $website.Name
+
+        $AuthenticationInfo += "                    Anonymous = `$" + $prop.Value + ";`r`n"
+
+        $prop = Get-WebConfigurationProperty `
+        -Filter /system.WebServer/security/authentication/DigestAuthentication `
+        -Name enabled `
+        -Location $website.Name
+
+        $AuthenticationInfo += "                    Digest = `$" + $prop.Value + ";`r`n"
+
+        $prop = Get-WebConfigurationProperty `
+        -Filter /system.WebServer/security/authentication/WindowsAuthentication `
+        -Name enabled `
+        -Location $website.Name
+
+        $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
+
+        $results.AuthenticationInfo = $AuthenticationInfo
+
         $Script:dscConfigContent += "        xWebSite " + [System.Guid]::NewGuid().toString() + "`r`n"
         $Script:dscConfigContent += "        {`r`n"
-        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
         $Script:dscConfigContent += "        }`r`n"
     }
 }
