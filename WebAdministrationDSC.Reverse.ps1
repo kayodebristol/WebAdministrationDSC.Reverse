@@ -69,6 +69,9 @@ function Orchestrator
     Write-Host "Scanning xWebsite..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-xWebsite
 
+    Write-Host "Scanning xWebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebAppPool
+
     Write-Host "Configuring Local Configuration Manager (LCM)..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-LCM
 
@@ -156,6 +159,37 @@ function Read-xWebsite()
         $results.LogFlags = $results.LogFlags.Split(",")
 
         $Script:dscConfigContent += "        xWebSite " + [System.Guid]::NewGuid().toString() + "`r`n"
+        $Script:dscConfigContent += "        {`r`n"
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+        $Script:dscConfigContent += "        }`r`n"
+    }
+}
+
+function Read-xWebAppPool()
+{    
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
+    Import-Module $module
+    $params = Get-DSCFakeParameters -ModulePath $module
+    
+    $appPools = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add'
+
+    foreach($appPool in $appPools)
+    {
+        <# Setting Primary Keys #>
+        $params.Name = $appPool.Name
+        $results = Get-TargetResource @params
+        if($appPool.ProcessModel -eq "SpecificUser")
+        {
+            $securePassword = ConvertTo-SecureString $appPool.ProcessModel.password -AsPlainText
+            $creds = New-Object System.Automation.PSCredential($appPool.ProcessModel.username, $securePassword)
+            $results.Credential = "`$Creds" + $appPool.ProcessModel.username
+        }
+        else
+        {
+            $results.Remove("Credential")
+        }
+
+        $Script:dscConfigContent += "        xWebAppPool " + [System.Guid]::NewGuid().toString() + "`r`n"
         $Script:dscConfigContent += "        {`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
         $Script:dscConfigContent += "        }`r`n"
