@@ -102,16 +102,21 @@ function Read-xWebsite()
         {
             $currentBinding = "`r`n                MSFT_xWebBindingInformation`r`n" `
                 + "                {`r`n" `
-                + "                    Protocol = `"" + $binding.Protocol + "`";`r`n" `
-                + "                    Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
-            if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
+                + "                    Protocol = `"" + $binding.Protocol + "`";`r`n"
+            $port = $binding.BindingInformation.Replace(":", "").Replace("*", "").Replace("localhost","")
+            if($null -ne $port -and "" -ne $port)
             {
-                $currentBinding += "                    CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
+                $currentBinding += "                    Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
             }
-            if($null -ne $binding.CertificateStoreName -and "" -ne $binding.CertificateStoreName)
+
+            if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
             {
-                $currentBinding += "                    CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"
-            }
+                if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
+                {
+                    $currentBinding += "                    CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
+                }
+                $currentBinding += "                    CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"     
+            }       
             $currentBinding += "                }"
 
             $results.BindingInfo += $currentBinding
@@ -148,6 +153,7 @@ function Read-xWebsite()
         $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
 
         $results.AuthenticationInfo = $AuthenticationInfo
+        $results.LogFlags = $results.LogFlags.Split(",")
 
         $Script:dscConfigContent += "        xWebSite " + [System.Guid]::NewGuid().toString() + "`r`n"
         $Script:dscConfigContent += "        {`r`n"
