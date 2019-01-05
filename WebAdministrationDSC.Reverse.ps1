@@ -20,7 +20,7 @@
 #Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.2.0"},@{ModuleName="xWebAdministration";ModuleVersion="1.18.0.0"}
 
 <# 
-
+get-
 .DESCRIPTION 
  Extracts the DSC Configuration of an existing IIS environment, allowing you to analyze it or to replicate it.
 
@@ -33,9 +33,7 @@ $VerbosePreference = "SilentlyContinue"
 
 <## Scripts Variables #>
 $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
-$DSCSource = "C:\Program Files\WindowsPowerShell\Modules\xWebAdministration\" # Path to the root folder of your technology's DSC Module (e.g. C:\Program Files\WindowsPowerShell\SharePointDSC);
-$DSCVersion = "1.18.0.0" # Version of the DSC module for the technology (e.g. 1.0.0.0);
-$Script:DSCPath = $DSCSource + $DSCVersion # Dynamic path to include the version number as a folder;
+$Script:DSCPath = Get-Module -Name xWebAdministration -ListAvailable | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
 $Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
 
 <# Retrieves Information about the current script from the PSScriptInfo section above #>
@@ -54,8 +52,7 @@ function Orchestrator
     <# Import the ReverseDSC Core Engine #>
     $module = "ReverseDSC"
     Import-Module -Name $module -Force
-    
-    
+        
     $Script:dscConfigContent += "<# Generated with WebAdministrationDSC.Reverse " + $script:version + " #>`r`n"   
     $Script:dscConfigContent += "Configuration $Script:configName`r`n"
     $Script:dscConfigContent += "{`r`n"
@@ -63,14 +60,17 @@ function Orchestrator
     Write-Host "Configuring Dependencies..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-Imports
 
-    $Script:dscConfigContent += "    Node $env:COMPUTERNAME`r`n"
+    $Script:dscConfigContent += "    Node `$Allnodes.nodename`r`n"
     $Script:dscConfigContent += "    {`r`n"
+
+    Write-Host "Scanning xWebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebAppPool
     
     Write-Host "Scanning xWebsite..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-xWebsite
 
-    Write-Host "Scanning xWebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
-    Read-xWebAppPool
+    Write-Host "Scanning xWebVirtualDirectory..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebVirtualDirectory
 
     Write-Host "Configuring Local Configuration Manager (LCM)..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-LCM
@@ -158,10 +158,54 @@ function Read-xWebsite()
         $results.AuthenticationInfo = $AuthenticationInfo
         $results.LogFlags = $results.LogFlags.Split(",")
 
-        $Script:dscConfigContent += "        xWebSite " + [System.Guid]::NewGuid().toString() + "`r`n"
+        $Script:dscConfigContent += "        xWebSite " + '"' + $website.Name + '"' + "`r`n"
         $Script:dscConfigContent += "        {`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
         $Script:dscConfigContent += "        }`r`n"
+    }
+}
+
+function Read-xWebVirtualDirectory()
+{    
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
+    Import-Module $module
+
+    $webSites = Get-WebSite
+
+    foreach($website in $webSites)
+    {
+        $webVirtualDirectories = Get-WebVirtualDirectory -Site $website.name
+        
+        if($webVirtualDirectories)
+        {
+            foreach($webvirtualdirectory in $webVirtualDirectories)
+            {
+                $path = $webvirtualdirectory.Path
+                $name = $path.Split("/")[1]
+                
+                if (($path.ToCharArray() | Where-Object {$_ -eq '/'}).count -eq 1){
+                    $webApplication = ""
+                }
+                else{
+                    $webApplication = $path.Substring((($path.IndexOf($name)) + 1 + $name.Length))
+                }
+
+                $params = Get-DSCFakeParameters -ModulePath $module
+
+                <# Setting Primary Keys #>
+                $params.Name = $name
+                $params.PhysicalPath = $webvirtualdirectory.PhysicalPath
+                $params.WebApplication = $webApplication
+                $params.Website = $website.Name
+
+                $results = Get-TargetResource @params
+
+                $Script:dscConfigContent += "        xWebVirtualDirectory " + '"' + $website.Name + " " + $path + '"' + "`r`n"
+                $Script:dscConfigContent += "        {`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $Script:dscConfigContent += "        }`r`n"
+            }
+        }
     }
 }
 
@@ -189,7 +233,7 @@ function Read-xWebAppPool()
             $results.Remove("Credential")
         }
 
-        $Script:dscConfigContent += "        xWebAppPool " + [System.Guid]::NewGuid().toString() + "`r`n"
+        $Script:dscConfigContent += "        xWebAppPool " + '"' + $appPool.Name + '"' + "`r`n"
         $Script:dscConfigContent += "        {`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
         $Script:dscConfigContent += "        }`r`n"
