@@ -180,27 +180,16 @@ function Read-xWebVirtualDirectory()
         {
             foreach($webvirtualdirectory in $webVirtualDirectories)
             {
-                $path = $webvirtualdirectory.Path
-                $name = $path.Split("/")[1]
-                
-                if (($path.ToCharArray() | Where-Object {$_ -eq '/'}).count -eq 1){
-                    $webApplication = ""
-                }
-                else{
-                    $webApplication = $path.Substring((($path.IndexOf($name)) + 1 + $name.Length))
-                }
-
                 $params = Get-DSCFakeParameters -ModulePath $module
 
                 <# Setting Primary Keys #>
-                $params.Name = $name
-                $params.PhysicalPath = $webvirtualdirectory.PhysicalPath
-                $params.WebApplication = $webApplication
+                $params.Name = $webvirtualdirectory.Path
+                $params.WebApplication = ""
                 $params.Website = $website.Name
 
                 $results = Get-TargetResource @params
 
-                $Script:dscConfigContent += "        xWebVirtualDirectory " + '"' + $website.Name + " " + $path + '"' + "`r`n"
+                $Script:dscConfigContent += "        xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
                 $Script:dscConfigContent += "        {`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
                 $Script:dscConfigContent += "        }`r`n"
