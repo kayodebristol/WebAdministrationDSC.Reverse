@@ -362,18 +362,16 @@ function Get-ReverseDSC()
         $OutputDSCPath += "\"
     }
 
-    <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
-    $outputDSCFile = $OutputDSCPath + $fileName
-    $Script:dscConfigContent | Out-File $outputDSCFile
-    Write-Output "Done."
-    
-    #Remove some knwon empty arrays to prevent issues
-    $DSCFileFullPath = Join-Path -Path $OutputDSCPath -ChildPath $fileName
-    Get-Content -Path $DSCFileFullPath | Where-Object {$_ -notmatch 'LogCustomFields|LogtruncateSize|SslFlags = \@\(\)'} | Out-File -FilePath $DSCFileFullPath -Force
-    
-    <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
-    Start-Sleep 2
-    Invoke-Item -Path $OutputDSCPath
+     <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
+     $outputDSCFile = $OutputDSCPath + $fileName
+     $Script:dscConfigContent | Out-File $outputDSCFile
+     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array
+     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogCustomFields|LogtruncateSize|SslFlags = \@\(\)"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     Write-Output "Done."
+     
+     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
+     Start-Sleep 2
+     Invoke-Item -Path $OutputDSCPath
 }
 
 Get-ReverseDSC
