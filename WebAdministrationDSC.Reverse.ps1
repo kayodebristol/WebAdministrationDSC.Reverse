@@ -32,7 +32,9 @@ $VerbosePreference = "SilentlyContinue"
 
 <## Scripts Variables #>
 $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
-$Script:DSCPath = Get-Module -Name xWebAdministration -ListAvailable | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
+$DSCModule = Get-Module -Name xWebAdministration -ListAvailable
+$Script:DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
+$Script:DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
 $Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
 
 <# Retrieves Information about the current script from the PSScriptInfo section above #>
@@ -316,7 +318,7 @@ function Set-ConfigurationData
 function Set-Imports
 {
     $Script:dscConfigContent += "    Import-DscResource -ModuleName PSDesiredStateConfiguration`r`n"
-    $Script:dscConfigContent += "    Import-DscResource -ModuleName xWebAdministration -ModuleVersion `"" + $DSCVersion  + "`"`r`n"
+    $Script:dscConfigContent += "    Import-DscResource -ModuleName xWebAdministration -ModuleVersion `"" + $Script:DSCVersion  + "`"`r`n"
 }
 
 <## This function sets the settings for the Local Configuration Manager (LCM) component on the server we will be configuring using our resulting DSC Configuration script. The LCM component is the one responsible for orchestrating all DSC configuration related activities and processes on a server. This method specifies settings telling the LCM to not hesitate rebooting the server we are configurating automatically if it requires a reboot (i.e. During the SharePoint Prerequisites installation). Setting this value helps reduce the amount of manual interaction that is required to automate the configuration of our SharePoint farm using our resulting DSC Configuration script. #>
