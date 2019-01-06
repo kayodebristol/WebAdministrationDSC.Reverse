@@ -72,6 +72,9 @@ function Orchestrator
     Write-Host "Scanning xWebVirtualDirectory..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-xWebVirtualDirectory
 
+    Write-Host "Scanning xWebApplication..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebApplication
+
     Write-Host "Configuring Local Configuration Manager (LCM)..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-LCM
 
@@ -190,6 +193,70 @@ function Read-xWebVirtualDirectory()
                 $results = Get-TargetResource @params
 
                 $Script:dscConfigContent += "        xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
+                $Script:dscConfigContent += "        {`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $Script:dscConfigContent += "        }`r`n"
+            }
+        }
+    }
+}
+
+function Read-xWebApplication()
+{    
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
+    Import-Module $module
+
+    $webSites = Get-WebSite
+
+    foreach($website in $webSites)
+    {
+        $webApplications = Get-WebApplication -Site $website.name
+        
+        if($webApplications)
+        {
+            foreach($webapplication in $webApplications)
+            {
+                $params = Get-DSCFakeParameters -ModulePath $module
+
+                <# Setting Primary Keys #>
+                $params.Name = $webapplication.Path
+                $params.Website = $website.Name
+
+                $results = Get-TargetResource @params
+
+                $AuthenticationInfo = "`r`n                MSFT_xWebApplicationAuthenticationInformation`r`n                {`r`n"
+        
+                $prop = Get-WebConfigurationProperty `
+                -Filter /system.WebServer/security/authentication/BasicAuthentication `
+                -Name enabled `
+                -Location $website.Name
+
+                $AuthenticationInfo += "                    Basic = `$" + $prop.Value + ";`r`n"
+
+                $prop = Get-WebConfigurationProperty `
+                -Filter /system.WebServer/security/authentication/AnonymousAuthentication `
+                -Name enabled `
+                -Location $website.Name
+
+                $AuthenticationInfo += "                    Anonymous = `$" + $prop.Value + ";`r`n"
+
+                $prop = Get-WebConfigurationProperty `
+                -Filter /system.WebServer/security/authentication/DigestAuthentication `
+                -Name enabled `
+                -Location $website.Name
+
+                $AuthenticationInfo += "                    Digest = `$" + $prop.Value + ";`r`n"
+
+                $prop = Get-WebConfigurationProperty `
+                -Filter /system.WebServer/security/authentication/WindowsAuthentication `
+                -Name enabled `
+                -Location $website.Name
+
+                $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
+
+                $results.AuthenticationInfo = $AuthenticationInfo
+                
+                $Script:dscConfigContent += "        xWebApplication " + '"' + $website.Name + " " + $webapplication.Path + '"' + "`r`n"
                 $Script:dscConfigContent += "        {`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
                 $Script:dscConfigContent += "        }`r`n"
