@@ -20,7 +20,6 @@
 #Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.2.0"},@{ModuleName="xWebAdministration";ModuleVersion="1.18.0.0"}
 
 <# 
-get-
 .DESCRIPTION 
  Extracts the DSC Configuration of an existing IIS environment, allowing you to analyze it or to replicate it.
 
