@@ -178,25 +178,33 @@ function Read-xWebVirtualDirectory()
 
     foreach($website in $webSites)
     {
+        Write-Verbose "WebSite: $($website.name)"
         $webVirtualDirectories = Get-WebVirtualDirectory -Site $website.name
         
         if($webVirtualDirectories)
         {
             foreach($webvirtualdirectory in $webVirtualDirectories)
             {
+                Write-Verbose "WebSite/Application: $($website.name)$($webvirtualdirectory.path)"
                 $params = Get-DSCFakeParameters -ModulePath $module
 
                 <# Setting Primary Keys #>
                 $params.Name = $webvirtualdirectory.Path
                 $params.WebApplication = ""
                 $params.Website = $website.Name
-
+                #$params.PhysicalPath  = $webapplication.PhysicalPath
+                Write-Verbose "Key parameters as follows"
+                $params | ConvertTo-Json | Write-Verbose
+                
                 $results = Get-TargetResource @params
+                Write-Verbose "All Parameters as follows"
+                $results | ConvertTo-Json | Write-Verbose 
 
-                $Script:dscConfigContent += "        xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
-                $Script:dscConfigContent += "        {`r`n"
+                $depth = 1
+                $Script:dscConfigContent += "`t" * $depth + "xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "{`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-                $Script:dscConfigContent += "        }`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "}`r`n"
             }
         }
     }
@@ -211,19 +219,27 @@ function Read-xWebApplication()
 
     foreach($website in $webSites)
     {
+        Write-Verbose "WebSite: $($website.name)"
         $webApplications = Get-WebApplication -Site $website.name
         
         if($webApplications)
         {
             foreach($webapplication in $webApplications)
             {
+                Write-Verbose "WebSite/Application: $($website.name)$($webvirtualdirectory.path)"
                 $params = Get-DSCFakeParameters -ModulePath $module
 
                 <# Setting Primary Keys #>
                 $params.Name = $webapplication.Path
                 $params.Website = $website.Name
+                #$params.WebAppPool = $webapplication.applicationpool
+                #$params.PhysicalPath  = $webapplication.PhysicalPath
+                Write-Verbose "Key parameters as follows"
+                $params | ConvertTo-Json | Write-Verbose
 
                 $results = Get-TargetResource @params
+                Write-Verbose "All Parameters as follows"
+                $results | ConvertTo-Json | Write-Verbose
 
                 $AuthenticationInfo = "`r`n                MSFT_xWebApplicationAuthenticationInformation`r`n                {`r`n"
         
@@ -231,6 +247,7 @@ function Read-xWebApplication()
                 -Filter /system.WebServer/security/authentication/BasicAuthentication `
                 -Name enabled `
                 -Location $website.Name
+                Write-Verbose "BasicAuthentication: $($prop.Value)"
 
                 $AuthenticationInfo += "                    Basic = `$" + $prop.Value + ";`r`n"
 
@@ -238,6 +255,7 @@ function Read-xWebApplication()
                 -Filter /system.WebServer/security/authentication/AnonymousAuthentication `
                 -Name enabled `
                 -Location $website.Name
+                Write-Verbose "AnonymousAuthentication: $($prop.Value)"
 
                 $AuthenticationInfo += "                    Anonymous = `$" + $prop.Value + ";`r`n"
 
@@ -245,6 +263,7 @@ function Read-xWebApplication()
                 -Filter /system.WebServer/security/authentication/DigestAuthentication `
                 -Name enabled `
                 -Location $website.Name
+                Write-Verbose "DigestAuthentication: $($prop.Value)"
 
                 $AuthenticationInfo += "                    Digest = `$" + $prop.Value + ";`r`n"
 
@@ -252,15 +271,16 @@ function Read-xWebApplication()
                 -Filter /system.WebServer/security/authentication/WindowsAuthentication `
                 -Name enabled `
                 -Location $website.Name
-
+                Write-Verbose "WindowsAuthentication: $($prop.Value)"
+                
                 $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
 
                 $results.AuthenticationInfo = $AuthenticationInfo
                 
-                $Script:dscConfigContent += "        xWebApplication " + '"' + $website.Name + " " + $webapplication.Path + '"' + "`r`n"
-                $Script:dscConfigContent += "        {`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "xWebApplication " + '"' + $website.Name + " " + $webapplication.Path + '"' + "`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "{`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-                $Script:dscConfigContent += "        }`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "}`r`n"
             }
         }
     }
