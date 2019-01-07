@@ -28,7 +28,7 @@
 param()
 
 <## Script Settings #>
-$VerbosePreference = "SilentlyContinue"
+$VerbosePreference = "Continue"
 
 <## Scripts Variables #>
 $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
@@ -89,7 +89,7 @@ function Orchestrator
 }
 
 #region Reverse Functions
-function Read-xWebsite()
+function Read-xWebsite($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
     Import-Module $module
@@ -129,47 +129,35 @@ function Read-xWebsite()
             $results.BindingInfo += $currentBinding
         }
 
-        $AuthenticationInfo = "`r`n                MSFT_xWebAuthenticationInformation`r`n                {`r`n"
-        
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/BasicAuthentication `
-        -Name enabled `
-        -Location $website.Name
+        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+                
+        $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
 
-        $AuthenticationInfo += "                    Basic = `$" + $prop.Value + ";`r`n"
-
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/AnonymousAuthentication `
-        -Name enabled `
-        -Location $website.Name
-
-        $AuthenticationInfo += "                    Anonymous = `$" + $prop.Value + ";`r`n"
-
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/DigestAuthentication `
-        -Name enabled `
-        -Location $website.Name
-
-        $AuthenticationInfo += "                    Digest = `$" + $prop.Value + ";`r`n"
-
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/WindowsAuthentication `
-        -Name enabled `
-        -Location $website.Name
-
-        $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
+        foreach ($authenticationtype in $AuthenticationTypes)
+        {
+            Remove-Variable -Name location -ErrorAction SilentlyContinue
+            Remove-Variable -Name prop -ErrorAction SilentlyContinue
+            $location = $website.Name
+            $prop = Get-WebConfigurationProperty `
+            -Filter /system.WebServer/security/authentication/$authenticationtype `
+            -Name enabled `
+            -Location $location
+            Write-Verbose "$authenticationtype : $($prop.Value)"
+            $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+        }
+        $AuthenticationInfo += "`t" * ($depth + 2) + "}"
 
         $results.AuthenticationInfo = $AuthenticationInfo
         $results.LogFlags = $results.LogFlags.Split(",")
 
-        $Script:dscConfigContent += "        xWebSite " + '"' + $website.Name + '"' + "`r`n"
-        $Script:dscConfigContent += "        {`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "xWebSite " + '"' + $website.Name + '"' + "`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "{`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-        $Script:dscConfigContent += "        }`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "}`r`n"
     }
 }
 
-function Read-xWebVirtualDirectory()
+function Read-xWebVirtualDirectory($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
     Import-Module $module
@@ -192,6 +180,7 @@ function Read-xWebVirtualDirectory()
                 $params.Name = $webvirtualdirectory.Path
                 $params.WebApplication = ""
                 $params.Website = $website.Name
+                <# Setting Required Keys #>
                 #$params.PhysicalPath  = $webapplication.PhysicalPath
                 Write-Verbose "Key parameters as follows"
                 $params | ConvertTo-Json | Write-Verbose
@@ -200,7 +189,6 @@ function Read-xWebVirtualDirectory()
                 Write-Verbose "All Parameters as follows"
                 $results | ConvertTo-Json | Write-Verbose 
 
-                $depth = 1
                 $Script:dscConfigContent += "`t" * $depth + "xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
                 $Script:dscConfigContent += "`t" * $depth + "{`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
@@ -210,7 +198,7 @@ function Read-xWebVirtualDirectory()
     }
 }
 
-function Read-xWebApplication()
+function Read-xWebApplication($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
     Import-Module $module
@@ -232,6 +220,7 @@ function Read-xWebApplication()
                 <# Setting Primary Keys #>
                 $params.Name = $webapplication.Path
                 $params.Website = $website.Name
+                <# Setting Required Keys #>
                 #$params.WebAppPool = $webapplication.applicationpool
                 #$params.PhysicalPath  = $webapplication.PhysicalPath
                 Write-Verbose "Key parameters as follows"
@@ -241,42 +230,27 @@ function Read-xWebApplication()
                 Write-Verbose "All Parameters as follows"
                 $results | ConvertTo-Json | Write-Verbose
 
-                $AuthenticationInfo = "`r`n                MSFT_xWebApplicationAuthenticationInformation`r`n                {`r`n"
-        
-                $prop = Get-WebConfigurationProperty `
-                -Filter /system.WebServer/security/authentication/BasicAuthentication `
-                -Name enabled `
-                -Location $website.Name
-                Write-Verbose "BasicAuthentication: $($prop.Value)"
-
-                $AuthenticationInfo += "                    Basic = `$" + $prop.Value + ";`r`n"
-
-                $prop = Get-WebConfigurationProperty `
-                -Filter /system.WebServer/security/authentication/AnonymousAuthentication `
-                -Name enabled `
-                -Location $website.Name
-                Write-Verbose "AnonymousAuthentication: $($prop.Value)"
-
-                $AuthenticationInfo += "                    Anonymous = `$" + $prop.Value + ";`r`n"
-
-                $prop = Get-WebConfigurationProperty `
-                -Filter /system.WebServer/security/authentication/DigestAuthentication `
-                -Name enabled `
-                -Location $website.Name
-                Write-Verbose "DigestAuthentication: $($prop.Value)"
-
-                $AuthenticationInfo += "                    Digest = `$" + $prop.Value + ";`r`n"
-
-                $prop = Get-WebConfigurationProperty `
-                -Filter /system.WebServer/security/authentication/WindowsAuthentication `
-                -Name enabled `
-                -Location $website.Name
-                Write-Verbose "WindowsAuthentication: $($prop.Value)"
+                $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebApplicationAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
                 
-                $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
+                $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
+
+                foreach ($authenticationtype in $AuthenticationTypes)
+                {
+                    Remove-Variable -Name location -ErrorAction SilentlyContinue
+                    Remove-Variable -Name prop -ErrorAction SilentlyContinue
+                    $location = "$($website.Name)" + "$($webapplication.Path)"
+                    $prop = Get-WebConfigurationProperty `
+                    -Filter /system.WebServer/security/authentication/$authenticationtype `
+                    -Name enabled `
+                    -PSPath "IIS:\Sites\$location"
+                    Write-Verbose "$authenticationtype : $($prop.Value)"
+                    $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+                }
+                $AuthenticationInfo += "`t" * ($depth + 2) + "}"
 
                 $results.AuthenticationInfo = $AuthenticationInfo
-                
+                $results.SslFlags = $results.SslFlags.Split(",")
+
                 $Script:dscConfigContent += "`t" * $depth + "xWebApplication " + '"' + $website.Name + " " + $webapplication.Path + '"' + "`r`n"
                 $Script:dscConfigContent += "`t" * $depth + "{`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
@@ -286,7 +260,7 @@ function Read-xWebApplication()
     }
 }
 
-function Read-xWebAppPool()
+function Read-xWebAppPool($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
     Import-Module $module
@@ -310,10 +284,10 @@ function Read-xWebAppPool()
             $results.Remove("Credential")
         }
 
-        $Script:dscConfigContent += "        xWebAppPool " + '"' + $appPool.Name + '"' + "`r`n"
-        $Script:dscConfigContent += "        {`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "xWebAppPool " + '"' + $appPool.Name + '"' + "`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "{`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-        $Script:dscConfigContent += "        }`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "}`r`n"
     }
 }
 #endregion
@@ -387,7 +361,7 @@ function Get-ReverseDSC()
      $outputDSCFile = $OutputDSCPath + $fileName
      $Script:dscConfigContent | Out-File $outputDSCFile
      #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array
-     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogCustomFields|LogtruncateSize|SslFlags = \@\(\)"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogCustomFields|LogtruncateSize"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
      Write-Output "Done."
      
      <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
