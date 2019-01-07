@@ -20,7 +20,6 @@
 #Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.2.0"},@{ModuleName="xWebAdministration";ModuleVersion="1.18.0.0"}
 
 <# 
-
 .DESCRIPTION 
  Extracts the DSC Configuration of an existing IIS environment, allowing you to analyze it or to replicate it.
 
@@ -29,13 +28,13 @@
 param()
 
 <## Script Settings #>
-$VerbosePreference = "SilentlyContinue"
+$VerbosePreference = "Continue"
 
 <## Scripts Variables #>
 $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
-$DSCSource = "C:\Program Files\WindowsPowerShell\Modules\xWebAdministration\" # Path to the root folder of your technology's DSC Module (e.g. C:\Program Files\WindowsPowerShell\SharePointDSC);
-$DSCVersion = "1.18.0.0" # Version of the DSC module for the technology (e.g. 1.0.0.0);
-$Script:DSCPath = $DSCSource + $DSCVersion # Dynamic path to include the version number as a folder;
+$DSCModule = Get-Module -Name xWebAdministration -ListAvailable
+$Script:DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
+$Script:DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
 $Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
 
 <# Retrieves Information about the current script from the PSScriptInfo section above #>
@@ -54,8 +53,7 @@ function Orchestrator
     <# Import the ReverseDSC Core Engine #>
     $module = "ReverseDSC"
     Import-Module -Name $module -Force
-    
-    
+        
     $Script:dscConfigContent += "<# Generated with WebAdministrationDSC.Reverse " + $script:version + " #>`r`n"   
     $Script:dscConfigContent += "Configuration $Script:configName`r`n"
     $Script:dscConfigContent += "{`r`n"
@@ -63,14 +61,20 @@ function Orchestrator
     Write-Host "Configuring Dependencies..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-Imports
 
-    $Script:dscConfigContent += "    Node $env:COMPUTERNAME`r`n"
+    $Script:dscConfigContent += "    Node `$Allnodes.nodename`r`n"
     $Script:dscConfigContent += "    {`r`n"
+
+    Write-Host "Scanning xWebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebAppPool
     
     Write-Host "Scanning xWebsite..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-xWebsite
 
-    Write-Host "Scanning xWebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
-    Read-xWebAppPool
+    Write-Host "Scanning xWebVirtualDirectory..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebVirtualDirectory
+
+    Write-Host "Scanning xWebApplication..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-xWebApplication
 
     Write-Host "Configuring Local Configuration Manager (LCM)..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-LCM
@@ -85,7 +89,7 @@ function Orchestrator
 }
 
 #region Reverse Functions
-function Read-xWebsite()
+function Read-xWebsite($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
     Import-Module $module
@@ -125,47 +129,138 @@ function Read-xWebsite()
             $results.BindingInfo += $currentBinding
         }
 
-        $AuthenticationInfo = "`r`n                MSFT_xWebAuthenticationInformation`r`n                {`r`n"
-        
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/BasicAuthentication `
-        -Name enabled `
-        -Location $website.Name
+        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+                
+        $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
 
-        $AuthenticationInfo += "                    Basic = `$" + $prop.Value + ";`r`n"
-
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/AnonymousAuthentication `
-        -Name enabled `
-        -Location $website.Name
-
-        $AuthenticationInfo += "                    Anonymous = `$" + $prop.Value + ";`r`n"
-
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/DigestAuthentication `
-        -Name enabled `
-        -Location $website.Name
-
-        $AuthenticationInfo += "                    Digest = `$" + $prop.Value + ";`r`n"
-
-        $prop = Get-WebConfigurationProperty `
-        -Filter /system.WebServer/security/authentication/WindowsAuthentication `
-        -Name enabled `
-        -Location $website.Name
-
-        $AuthenticationInfo += "                    Windows = `$" + $prop.Value + ";`r`n                }`r`n"
+        foreach ($authenticationtype in $AuthenticationTypes)
+        {
+            Remove-Variable -Name location -ErrorAction SilentlyContinue
+            Remove-Variable -Name prop -ErrorAction SilentlyContinue
+            $location = $website.Name
+            $prop = Get-WebConfigurationProperty `
+            -Filter /system.WebServer/security/authentication/$authenticationtype `
+            -Name enabled `
+            -Location $location
+            Write-Verbose "$authenticationtype : $($prop.Value)"
+            $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+        }
+        $AuthenticationInfo += "`t" * ($depth + 2) + "}"
 
         $results.AuthenticationInfo = $AuthenticationInfo
         $results.LogFlags = $results.LogFlags.Split(",")
 
-        $Script:dscConfigContent += "        xWebSite " + [System.Guid]::NewGuid().toString() + "`r`n"
-        $Script:dscConfigContent += "        {`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "xWebSite " + '"' + $website.Name + '"' + "`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "{`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-        $Script:dscConfigContent += "        }`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "}`r`n"
     }
 }
 
-function Read-xWebAppPool()
+function Read-xWebVirtualDirectory($depth = 2)
+{    
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
+    Import-Module $module
+
+    $webSites = Get-WebSite
+
+    foreach($website in $webSites)
+    {
+        Write-Verbose "WebSite: $($website.name)"
+        $webVirtualDirectories = Get-WebVirtualDirectory -Site $website.name
+        
+        if($webVirtualDirectories)
+        {
+            foreach($webvirtualdirectory in $webVirtualDirectories)
+            {
+                Write-Verbose "WebSite/Application: $($website.name)$($webvirtualdirectory.path)"
+                $params = Get-DSCFakeParameters -ModulePath $module
+
+                <# Setting Primary Keys #>
+                $params.Name = $webvirtualdirectory.Path
+                $params.WebApplication = ""
+                $params.Website = $website.Name
+                <# Setting Required Keys #>
+                #$params.PhysicalPath  = $webapplication.PhysicalPath
+                Write-Verbose "Key parameters as follows"
+                $params | ConvertTo-Json | Write-Verbose
+                
+                $results = Get-TargetResource @params
+                Write-Verbose "All Parameters as follows"
+                $results | ConvertTo-Json | Write-Verbose 
+
+                $Script:dscConfigContent += "`t" * $depth + "xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "{`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $Script:dscConfigContent += "`t" * $depth + "}`r`n"
+            }
+        }
+    }
+}
+
+function Read-xWebApplication($depth = 2)
+{    
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
+    Import-Module $module
+
+    $webSites = Get-WebSite
+
+    foreach($website in $webSites)
+    {
+        Write-Verbose "WebSite: $($website.name)"
+        $webApplications = Get-WebApplication -Site $website.name
+        
+        if($webApplications)
+        {
+            foreach($webapplication in $webApplications)
+            {
+                Write-Verbose "WebSite/Application: $($website.name)$($webvirtualdirectory.path)"
+                $params = Get-DSCFakeParameters -ModulePath $module
+
+                <# Setting Primary Keys #>
+                $params.Name = $webapplication.Path
+                $params.Website = $website.Name
+                <# Setting Required Keys #>
+                #$params.WebAppPool = $webapplication.applicationpool
+                #$params.PhysicalPath  = $webapplication.PhysicalPath
+                Write-Verbose "Key parameters as follows"
+                $params | ConvertTo-Json | Write-Verbose
+
+                $results = Get-TargetResource @params
+                Write-Verbose "All Parameters as follows"
+                $results | ConvertTo-Json | Write-Verbose
+
+                $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebApplicationAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+                
+                $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
+
+                foreach ($authenticationtype in $AuthenticationTypes)
+                {
+                    Remove-Variable -Name location -ErrorAction SilentlyContinue
+                    Remove-Variable -Name prop -ErrorAction SilentlyContinue
+                    $location = "$($website.Name)" + "$($webapplication.Path)"
+                    $prop = Get-WebConfigurationProperty `
+                    -Filter /system.WebServer/security/authentication/$authenticationtype `
+                    -Name enabled `
+                    -PSPath "IIS:\Sites\$location"
+                    Write-Verbose "$authenticationtype : $($prop.Value)"
+                    $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+                }
+                $AuthenticationInfo += "`t" * ($depth + 2) + "}"
+
+                $results.AuthenticationInfo = $AuthenticationInfo
+                $results.SslFlags = $results.SslFlags.Split(",")
+
+                $Script:dscConfigContent += "`t" * $depth + "xWebApplication " + '"' + $website.Name + " " + $webapplication.Path + '"' + "`r`n"
+                $Script:dscConfigContent += "`t" * $depth + "{`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $Script:dscConfigContent += "`t" * $depth + "}`r`n"
+            }
+        }
+    }
+}
+
+function Read-xWebAppPool($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
     Import-Module $module
@@ -189,10 +284,10 @@ function Read-xWebAppPool()
             $results.Remove("Credential")
         }
 
-        $Script:dscConfigContent += "        xWebAppPool " + [System.Guid]::NewGuid().toString() + "`r`n"
-        $Script:dscConfigContent += "        {`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "xWebAppPool " + '"' + $appPool.Name + '"' + "`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "{`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-        $Script:dscConfigContent += "        }`r`n"
+        $Script:dscConfigContent += "`t" * $depth + "}`r`n"
     }
 }
 #endregion
@@ -217,7 +312,7 @@ function Set-ConfigurationData
 function Set-Imports
 {
     $Script:dscConfigContent += "    Import-DscResource -ModuleName PSDesiredStateConfiguration`r`n"
-    $Script:dscConfigContent += "    Import-DscResource -ModuleName xWebAdministration -ModuleVersion `"" + $DSCVersion  + "`"`r`n"
+    $Script:dscConfigContent += "    Import-DscResource -ModuleName xWebAdministration -ModuleVersion `"" + $Script:DSCVersion  + "`"`r`n"
 }
 
 <## This function sets the settings for the Local Configuration Manager (LCM) component on the server we will be configuring using our resulting DSC Configuration script. The LCM component is the one responsible for orchestrating all DSC configuration related activities and processes on a server. This method specifies settings telling the LCM to not hesitate rebooting the server we are configurating automatically if it requires a reboot (i.e. During the SharePoint Prerequisites installation). Setting this value helps reduce the amount of manual interaction that is required to automate the configuration of our SharePoint farm using our resulting DSC Configuration script. #>
@@ -262,13 +357,16 @@ function Get-ReverseDSC()
         $OutputDSCPath += "\"
     }
 
-    <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
-    $outputDSCFile = $OutputDSCPath + $fileName
-    $Script:dscConfigContent | Out-File $outputDSCFile
-    Write-Output "Done."
-    <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
-    Start-Sleep 2
-    Invoke-Item -Path $OutputDSCPath
+     <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
+     $outputDSCFile = $OutputDSCPath + $fileName
+     $Script:dscConfigContent | Out-File $outputDSCFile
+     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array
+     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogCustomFields|LogtruncateSize"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     Write-Output "Done."
+     
+     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
+     Start-Sleep 2
+     Invoke-Item -Path $OutputDSCPath
 }
 
 Get-ReverseDSC
