@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.0.0.0
+.VERSION 1.1.0.0
 
 .GUID 8e576300-141f-4381-96ea-a59d1f2837d2
 
@@ -10,14 +10,20 @@
 
 .EXTERNALMODULEDEPENDENCIES
 
+ReverseDSC version "1.9.3.0"
+xWebAdministration version "2.3.0.0"
+
 .TAGS IIS,ReverseDSC
 
 .RELEASENOTES
 
-* Initial Release;
+* New Functions Read-WebApplication, Read-WebVirtualDirectory;
+* Verbose outputs for all functions
+* All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
+
 #>
 
-#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.2.0"},@{ModuleName="xWebAdministration";ModuleVersion="1.18.0.0"}
+#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.3.0"},@{ModuleName="xWebAdministration";ModuleVersion="2.3.0.0"}
 
 <# 
 .DESCRIPTION 
@@ -99,37 +105,43 @@ function Read-xWebsite($depth = 2)
 
     foreach($website in $webSites)
     {
+        Write-Verbose "WebSite: $($website.name)"
         <# Setting Primary Keys #>
         $params.Name = $website.Name
+        Write-Verbose "Key parameters as follows"
+        $params | ConvertTo-Json | Write-Verbose
 
         $results = Get-TargetResource @params
+        Write-Verbose "All Parameters as follows"
+        $results | ConvertTo-Json | Write-Verbose
+
         $results.BindingInfo = @();
 
         foreach($binding in $website.Bindings.Collection)
         {
-            $currentBinding = "`r`n                MSFT_xWebBindingInformation`r`n" `
-                + "                {`r`n" `
-                + "                    Protocol = `"" + $binding.Protocol + "`";`r`n"
+            $currentBinding = "`r`n" + "`t" * ($depth + 1) + "MSFT_xWebBindingInformation`r`n" `
+                + "`t" * ($depth + 1) + "{`r`n" `
+                + "`t" * ($depth + 2) + "Protocol = `"" + $binding.Protocol + "`";`r`n"
             $port = $binding.BindingInformation.Replace(":", "").Replace("*", "").Replace("localhost","")
             if($null -ne $port -and "" -ne $port)
             {
-                $currentBinding += "                    Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
+                $currentBinding += "`t" * ($depth + 2) + "Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
             }
 
             if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
             {
                 if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
                 {
-                    $currentBinding += "                    CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
+                    $currentBinding += "`t" * ($depth + 2) + "CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
                 }
-                $currentBinding += "                    CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"     
+                $currentBinding += "`t" * ($depth + 2) + "CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"     
             }       
-            $currentBinding += "                }"
+            $currentBinding += "`t" * ($depth + 1) + "}"
 
             $results.BindingInfo += $currentBinding
         }
 
-        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 1) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 1) + "{`r`n"
                 
         $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
 
@@ -139,21 +151,23 @@ function Read-xWebsite($depth = 2)
             Remove-Variable -Name prop -ErrorAction SilentlyContinue
             $location = $website.Name
             $prop = Get-WebConfigurationProperty `
-            -Filter /system.WebServer/security/authentication/$authenticationtype `
-            -Name enabled `
-            -Location $location
+                -Filter /system.WebServer/security/authentication/$authenticationtype `
+                -Name enabled `
+                -Location $location
             Write-Verbose "$authenticationtype : $($prop.Value)"
-            $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+            $AuthenticationInfo += "`t" * ($depth + 2) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
         }
-        $AuthenticationInfo += "`t" * ($depth + 2) + "}"
+        $AuthenticationInfo += "`t" * ($depth + 1) + "}"
 
         $results.AuthenticationInfo = $AuthenticationInfo
         $results.LogFlags = $results.LogFlags.Split(",")
 
-        $Script:dscConfigContent += "`t" * $depth + "xWebSite " + '"' + $website.Name + '"' + "`r`n"
-        $Script:dscConfigContent += "`t" * $depth + "{`r`n"
-        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-        $Script:dscConfigContent += "`t" * $depth + "}`r`n"
+        Write-Verbose "All Parameters with values"
+        $results | ConvertTo-Json | Write-Verbose
+
+        $Script:dscConfigContent += "`r`n"
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
+            -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($website.name)"
     }
 }
 
@@ -173,7 +187,7 @@ function Read-xWebVirtualDirectory($depth = 2)
         {
             foreach($webvirtualdirectory in $webVirtualDirectories)
             {
-                Write-Verbose "WebSite/Application: $($website.name)$($webvirtualdirectory.path)"
+                Write-Verbose "WebSite/VirtualDirectory: $($website.name)$($webvirtualdirectory.path)"
                 $params = Get-DSCFakeParameters -ModulePath $module
 
                 <# Setting Primary Keys #>
@@ -186,13 +200,14 @@ function Read-xWebVirtualDirectory($depth = 2)
                 $params | ConvertTo-Json | Write-Verbose
                 
                 $results = Get-TargetResource @params
-                Write-Verbose "All Parameters as follows"
-                $results | ConvertTo-Json | Write-Verbose 
 
-                $Script:dscConfigContent += "`t" * $depth + "xWebVirtualDirectory " + '"' + $website.Name + " " + $webvirtualdirectory.Path + '"' + "`r`n"
-                $Script:dscConfigContent += "`t" * $depth + "{`r`n"
-                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-                $Script:dscConfigContent += "`t" * $depth + "}`r`n"
+                Write-Verbose "All Parameters with values"
+                $results | ConvertTo-Json | Write-Verbose
+
+                $Script:dscConfigContent += "`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
+                    -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($website.name)$($webvirtualdirectory.path)" `
+                    -DependsOnClause "[xWebSite]$($website.name)" 
             }
         }
     }
@@ -214,7 +229,7 @@ function Read-xWebApplication($depth = 2)
         {
             foreach($webapplication in $webApplications)
             {
-                Write-Verbose "WebSite/Application: $($website.name)$($webvirtualdirectory.path)"
+                Write-Verbose "WebSite/Application: $($website.name)$($webapplication.path)"
                 $params = Get-DSCFakeParameters -ModulePath $module
 
                 <# Setting Primary Keys #>
@@ -250,11 +265,14 @@ function Read-xWebApplication($depth = 2)
 
                 $results.AuthenticationInfo = $AuthenticationInfo
                 $results.SslFlags = $results.SslFlags.Split(",")
+                
+                Write-Verbose "All Parameters with values"
+                $results | ConvertTo-Json | Write-Verbose
 
-                $Script:dscConfigContent += "`t" * $depth + "xWebApplication " + '"' + $website.Name + " " + $webapplication.Path + '"' + "`r`n"
-                $Script:dscConfigContent += "`t" * $depth + "{`r`n"
-                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-                $Script:dscConfigContent += "`t" * $depth + "}`r`n"
+                $Script:dscConfigContent += "`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
+                    -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($website.name)$($webapplication.path)" `
+                    -DependsOnClause "[xWebSite]$($website.name)"
             }
         }
     }
@@ -270,9 +288,17 @@ function Read-xWebAppPool($depth = 2)
 
     foreach($appPool in $appPools)
     {
+        Write-Verbose "Application Pool: $($appPool.name)"
         <# Setting Primary Keys #>
         $params.Name = $appPool.Name
+        Write-Verbose "Key parameters as follows"
+        $params | ConvertTo-Json | Write-Verbose
+
         $results = Get-TargetResource @params
+
+        Write-Verbose "All Parameters as follows"
+        $results | ConvertTo-Json | Write-Verbose
+
         if($appPool.ProcessModel -eq "SpecificUser")
         {
             $securePassword = ConvertTo-SecureString $appPool.ProcessModel.password -AsPlainText
@@ -284,10 +310,12 @@ function Read-xWebAppPool($depth = 2)
             $results.Remove("Credential")
         }
 
-        $Script:dscConfigContent += "`t" * $depth + "xWebAppPool " + '"' + $appPool.Name + '"' + "`r`n"
-        $Script:dscConfigContent += "`t" * $depth + "{`r`n"
-        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
-        $Script:dscConfigContent += "`t" * $depth + "}`r`n"
+        Write-Verbose "All Parameters with values"
+        $results | ConvertTo-Json | Write-Verbose
+
+        $Script:dscConfigContent += "`r`n"
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
+            -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($appPool.Name)"
     }
 }
 #endregion
