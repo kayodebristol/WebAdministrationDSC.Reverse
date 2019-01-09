@@ -10,7 +10,7 @@
 
 .EXTERNALMODULEDEPENDENCIES
 
-.TAGS IIS,ReverseDSC
+.TAGS IIS,ReverseDSC,DesiredStateConfiguration,DSC,DSCResourceKit,DSCResource
 
 .RELEASENOTES
 
