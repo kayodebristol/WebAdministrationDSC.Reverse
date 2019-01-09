@@ -10,9 +10,6 @@
 
 .EXTERNALMODULEDEPENDENCIES
 
-ReverseDSC version "1.9.3.0"
-xWebAdministration version "2.3.0.0"
-
 .TAGS IIS,ReverseDSC
 
 .RELEASENOTES
