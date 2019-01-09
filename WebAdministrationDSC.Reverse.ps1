@@ -18,6 +18,8 @@ RELEASE OWNER: Yagmur Sahin (Microsoft)
 * New Functions Read-WebApplication, Read-WebVirtualDirectory;
 * Verbose outputs for all functions
 * All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
+* Simplified binding information
+* Added LogCustomFields extraction support 
 
 #>
 
@@ -117,27 +119,42 @@ function Read-xWebsite($depth = 2)
 
         foreach($binding in $website.Bindings.Collection)
         {
-            $currentBinding = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebBindingInformation`r`n" `
-                + "`t" * ($depth + 2) + "{`r`n" `
-                + "`t" * ($depth + 3) + "Protocol = `"" + $binding.Protocol + "`";`r`n"
-            $port = $binding.BindingInformation.Replace(":", "").Replace("*", "").Replace("localhost","")
+            $currentBinding = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebBindingInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+            $currentBinding += "`t" * ($depth + 3) + "Protocol = `"$($binding.Protocol)`"" + ";`r`n"
+            
+            #$port = $binding.BindingInformation.Replace(":", "").Replace("*", "").Replace("localhost","")
+            $port = $binding.BindingInformation -replace "\D"
             if($null -ne $port -and "" -ne $port)
             {
-                $currentBinding += "`t" * ($depth + 3) + "Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
+                $currentBinding += "`t" * ($depth + 3) + "Port = $port;`r`n"
             }
 
             if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
             {
                 if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
                 {
-                    $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
+                    $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
                 }
-                $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"     
+                $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$(binding.CertificateStoreName)`";`r`n"     
             }       
             $currentBinding += "`t" * ($depth + 2) + "}"
 
             $results.BindingInfo += $currentBinding
         }
+
+        $results.LogCustomFields = @();
+
+        [string]$LogCustomFields = $null
+        foreach ($customfield in $webSite.logfile.customFields.Collection)
+        {   
+            $LogCustomFields += "`r`n" + "`t" * ($depth + 2) + "MSFT_xLogCustomFieldInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+            $LogCustomFields += "`t" * ($depth + 3) + "logFieldName = `"$($customfield.logFieldName)`";`r`n"
+            $LogCustomFields += "`t" * ($depth + 3) + "sourceName = `"$($customfield.sourceName)`";`r`n"
+            $LogCustomFields += "`t" * ($depth + 3) + "sourceType = `"$($customfield.sourceType)`";`r`n"
+            $LogCustomFields += "`t" * ($depth + 2) + "}"
+        }
+
+        $results.LogCustomFields = $LogCustomFields
 
         $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
                 
@@ -386,8 +403,8 @@ function Get-ReverseDSC()
      <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
      $outputDSCFile = $OutputDSCPath + $fileName
      $Script:dscConfigContent | Out-File $outputDSCFile
-     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array
-     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogCustomFields|LogtruncateSize"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
+     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogtruncateSize"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
      Write-Output "Done."
      
      <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
