@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.1.0.0
+.VERSION 1.1.0.1
 
 .GUID 8e576300-141f-4381-96ea-a59d1f2837d2
 
@@ -17,6 +17,7 @@ xWebAdministration version "2.3.0.0"
 
 .RELEASENOTES
 
+RELEASE OWNER: Yagmur Sahin (Microsoft)
 * New Functions Read-WebApplication, Read-WebVirtualDirectory;
 * Verbose outputs for all functions
 * All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
