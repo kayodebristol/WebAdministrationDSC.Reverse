@@ -14,12 +14,10 @@
 
 .RELEASENOTES
 
-RELEASE OWNER: Yagmur Sahin (Microsoft)
-* New Functions Read-WebApplication, Read-WebVirtualDirectory;
-* Verbose outputs for all functions
-* All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
-* Simplified binding information
-* Added LogCustomFields extraction support 
+Verbose outputs for all functions
+All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
+Simplified binding information
+Added LogCustomFields extraction support 
 
 #>
 
