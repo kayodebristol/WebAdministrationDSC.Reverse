@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.2.0.0
+.VERSION 1.2.1.0
 
 .GUID 8e576300-141f-4381-96ea-a59d1f2837d2
 
@@ -14,14 +14,15 @@
 
 .RELEASENOTES
 
-Verbose outputs for all functions
-All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
-Simplified binding information
-Added LogCustomFields extraction support 
+Improved binding information extraction
+minor bug fixes/typo correction
+tested with xWebAdministration 2.4.0.0
+WebAdministrationDSC.modified.ps1 output commented out instead of removing lines with known-issues
+Examples in block comments
 
 #>
 
-#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.3.0"},@{ModuleName="xWebAdministration";ModuleVersion="2.3.0.0"}
+#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.3.0"},@{ModuleName="xWebAdministration";ModuleVersion="2.4.0.0"}
 
 <# 
 .DESCRIPTION 
@@ -90,6 +91,14 @@ function Orchestrator
     Set-ConfigurationData
 
     $Script:dscConfigContent += "$Script:configName -ConfigurationData `$ConfigData"
+    $Script:dscConfigContent += "`r`n`r`n<#"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Remove-DscConfigurationDocument -Stage Pending,Current,Previous -Force"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Start-DscConfiguration -Path .\$Script:configName -Verbose -Wait"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Test-DscConfiguration -Verbose"
+    $Script:dscConfigContent += "`r`n#>"
 }
 
 #region Reverse Functions
@@ -411,7 +420,7 @@ function Get-ReverseDSC()
      $outputDSCFile = $OutputDSCPath + $fileName
      $Script:dscConfigContent | Out-File $outputDSCFile
      #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
-     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogtruncateSize"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     ((Get-Content $outputDSCFile).replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize")).replace("SslFlags = @()","#SslFlags = @()") | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
      Write-Output "Done."
      
      <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
