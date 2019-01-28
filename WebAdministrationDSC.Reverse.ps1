@@ -119,22 +119,31 @@ function Read-xWebsite($depth = 2)
         {
             $currentBinding = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebBindingInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
             $currentBinding += "`t" * ($depth + 3) + "Protocol = `"$($binding.Protocol)`"" + ";`r`n"
-            
-            #$port = $binding.BindingInformation.Replace(":", "").Replace("*", "").Replace("localhost","")
-            $port = $binding.BindingInformation -replace "\D"
-            if($null -ne $port -and "" -ne $port)
+            $currentBinding += "`t" * ($depth + 3) + "SslFlags = $($binding.sslFlags)" + ";`r`n"
+
+            if ($binding.protocol -match "^http")
             {
-                $currentBinding += "`t" * ($depth + 3) + "Port = $port;`r`n"
+                $bindingInfo = $binding.bindingInformation.split(":")
+                $ipAddress = $bindingInfo[0]
+                $port = $bindingInfo[1]
+                $hostName = $bindingInfo[2]
+                $currentBinding += "`t" * ($depth + 3) + "IPAddress = `"$ipAddress`"" + ";`r`n"
+                $currentBinding += "`t" * ($depth + 3) + "Port = $port" + ";`r`n"
+                $currentBinding += "`t" * ($depth + 3) + "Hostname = `"$hostName`"" + ";`r`n"
+                if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
+                {
+                    if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
+                    {
+                        $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
+                    }
+                    $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$($binding.CertificateStoreName)`";`r`n"     
+                }       
+            }
+            else
+            {
+                $currentBinding += "`t" * ($depth + 3) + "BindingInformation = `"$($binding.bindingInformation)`"" + ";`r`n"
             }
 
-            if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
-            {
-                if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
-                {
-                    $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
-                }
-                $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$($binding.CertificateStoreName)`";`r`n"     
-            }       
             $currentBinding += "`t" * ($depth + 2) + "}"
 
             $results.BindingInfo += $currentBinding
