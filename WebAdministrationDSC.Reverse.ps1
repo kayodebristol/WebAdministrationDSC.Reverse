@@ -133,7 +133,7 @@ function Read-xWebsite($depth = 2)
                 {
                     $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
                 }
-                $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$(binding.CertificateStoreName)`";`r`n"     
+                $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$($binding.CertificateStoreName)`";`r`n"     
             }       
             $currentBinding += "`t" * ($depth + 2) + "}"
 
