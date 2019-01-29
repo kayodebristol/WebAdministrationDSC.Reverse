@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.2.1.0
+.VERSION 1.2.1.1
 
 .GUID 8e576300-141f-4381-96ea-a59d1f2837d2
 
@@ -14,11 +14,9 @@
 
 .RELEASENOTES
 
-Improved binding information extraction
-minor bug fixes/typo correction
-tested with xWebAdministration 2.4.0.0
-WebAdministrationDSC.modified.ps1 output commented out instead of removing lines with known-issues
-Examples in block comments
+WebApplication Enabledprotocols string property comes from output converted to array
+Cmdletbinding attribute added to enable common variables
+Default verbose level removed
 
 #>
 
@@ -30,10 +28,12 @@ Examples in block comments
 
 #> 
 
+[CmdletBinding(ConfirmImpact='Low')]
+
 param()
 
 <## Script Settings #>
-$VerbosePreference = "Continue"
+#$VerbosePreference = "Continue"
 
 <## Scripts Variables #>
 $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
@@ -98,6 +98,10 @@ function Orchestrator
     $Script:dscConfigContent += "Start-DscConfiguration -Path .\$Script:configName -Verbose -Wait"
     $Script:dscConfigContent += "`r`n`t"
     $Script:dscConfigContent += "Test-DscConfiguration -Verbose"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Get-DscConfigurationStatus"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Get-DscConfigurationStatus -All"
     $Script:dscConfigContent += "`r`n#>"
 }
 
@@ -296,6 +300,7 @@ function Read-xWebApplication($depth = 2)
 
                 $results.AuthenticationInfo = $AuthenticationInfo
                 $results.SslFlags = $results.SslFlags.Split(",")
+                $results.EnabledProtocols = $results.EnabledProtocols.Split(",")
                 
                 Write-Verbose "All Parameters with values"
                 $results | ConvertTo-Json | Write-Verbose
