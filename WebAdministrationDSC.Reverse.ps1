@@ -139,9 +139,9 @@ function Read-xWebsite($depth = 2)
                 $currentBinding += "`t" * ($depth + 3) + "IPAddress = `"$ipAddress`"" + ";`r`n"
                 $currentBinding += "`t" * ($depth + 3) + "Port = $port" + ";`r`n"
                 $currentBinding += "`t" * ($depth + 3) + "Hostname = `"$hostName`"" + ";`r`n"
-                if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
+                if ($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
                 {
-                    if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
+                    if ($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
                     {
                         $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
                     }
