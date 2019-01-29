@@ -1,7 +1,7 @@
 # Changelog
 
 ## v1.2.1.1 - 2019-01-29
-- WebApplication Enabledprotocols string property
+- Fixed incorrect WebApplication Enabledprotocols property extraction
 - Cmdletbinding attribute added 
 - Verbose level disabled
 
