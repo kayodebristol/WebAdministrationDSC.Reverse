@@ -301,7 +301,7 @@ function Read-xWebApplication($depth = 2)
                 $results.AuthenticationInfo = $AuthenticationInfo
                 $results.SslFlags = $results.SslFlags.Split(",")
                 $results.EnabledProtocols = $results.EnabledProtocols.Split(",")
-                
+
                 Write-Verbose "All Parameters with values"
                 $results | ConvertTo-Json | Write-Verbose
 
