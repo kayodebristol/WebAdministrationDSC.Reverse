@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.1.0.1
+.VERSION 1.2.1.1
 
 .GUID 8e576300-141f-4381-96ea-a59d1f2837d2
 
@@ -10,23 +10,19 @@
 
 .EXTERNALMODULEDEPENDENCIES
 
-ReverseDSC version "1.9.3.0"
-xWebAdministration version "2.3.0.0"
-
-.TAGS IIS,ReverseDSC
+.TAGS IIS,ReverseDSC,DesiredStateConfiguration,DSC,DSCResourceKit,DSCResource
 
 .ICONURI https://github.com/Microsoft/WebAdministrationDSC.Reverse/raw/master/Images/WebAdministrationDSC.Reverse.png
 
 .RELEASENOTES
 
-RELEASE OWNER: Yagmur Sahin (Microsoft)
-* New Functions Read-WebApplication, Read-WebVirtualDirectory;
-* Verbose outputs for all functions
-* All functions updated to use new Get-DSCBlock parameters introduced in reverseDSC module with 1.9.3.0
+WebApplication Enabledprotocols string property comes from output converted to array
+Cmdletbinding attribute added to enable common variables
+Default verbose level removed
 
 #>
 
-#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.3.0"},@{ModuleName="xWebAdministration";ModuleVersion="2.3.0.0"}
+#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.3.0"},@{ModuleName="xWebAdministration";ModuleVersion="2.4.0.0"}
 
 <# 
 .DESCRIPTION 
@@ -34,10 +30,12 @@ RELEASE OWNER: Yagmur Sahin (Microsoft)
 
 #> 
 
+[CmdletBinding(ConfirmImpact='Low')]
+
 param()
 
 <## Script Settings #>
-$VerbosePreference = "Continue"
+#$VerbosePreference = "Continue"
 
 <## Scripts Variables #>
 $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
@@ -95,6 +93,18 @@ function Orchestrator
     Set-ConfigurationData
 
     $Script:dscConfigContent += "$Script:configName -ConfigurationData `$ConfigData"
+    $Script:dscConfigContent += "`r`n`r`n<#"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Remove-DscConfigurationDocument -Stage Pending,Current,Previous -Force"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Start-DscConfiguration -Path .\$Script:configName -Verbose -Wait"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Test-DscConfiguration -Verbose"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Get-DscConfigurationStatus"
+    $Script:dscConfigContent += "`r`n`t"
+    $Script:dscConfigContent += "Get-DscConfigurationStatus -All"
+    $Script:dscConfigContent += "`r`n#>"
 }
 
 #region Reverse Functions
@@ -122,29 +132,53 @@ function Read-xWebsite($depth = 2)
 
         foreach($binding in $website.Bindings.Collection)
         {
-            $currentBinding = "`r`n" + "`t" * ($depth + 1) + "MSFT_xWebBindingInformation`r`n" `
-                + "`t" * ($depth + 1) + "{`r`n" `
-                + "`t" * ($depth + 2) + "Protocol = `"" + $binding.Protocol + "`";`r`n"
-            $port = $binding.BindingInformation.Replace(":", "").Replace("*", "").Replace("localhost","")
-            if($null -ne $port -and "" -ne $port)
+            $currentBinding = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebBindingInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+            $currentBinding += "`t" * ($depth + 3) + "Protocol = `"$($binding.Protocol)`"" + ";`r`n"
+            $currentBinding += "`t" * ($depth + 3) + "SslFlags = $($binding.sslFlags)" + ";`r`n"
+
+            if ($binding.protocol -match "^http")
             {
-                $currentBinding += "`t" * ($depth + 2) + "Port = " + $binding.BindingInformation.Replace(":", "").Replace("*", "") + ";`r`n"
+                $bindingInfo = $binding.bindingInformation.split(":")
+                $ipAddress = $bindingInfo[0]
+                $port = $bindingInfo[1]
+                $hostName = $bindingInfo[2]
+                $currentBinding += "`t" * ($depth + 3) + "IPAddress = `"$ipAddress`"" + ";`r`n"
+                $currentBinding += "`t" * ($depth + 3) + "Port = $port" + ";`r`n"
+                $currentBinding += "`t" * ($depth + 3) + "Hostname = `"$hostName`"" + ";`r`n"
+                if ($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
+                {
+                    if ($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
+                    {
+                        $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
+                    }
+                    $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$($binding.CertificateStoreName)`";`r`n"     
+                }       
+            }
+            else
+            {
+                $currentBinding += "`t" * ($depth + 3) + "BindingInformation = `"$($binding.bindingInformation)`"" + ";`r`n"
             }
 
-            if($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
-            {
-                if($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
-                {
-                    $currentBinding += "`t" * ($depth + 2) + "CertificateThumbprint = `"" + $binding.CertificateHash + "`";`r`n"
-                }
-                $currentBinding += "`t" * ($depth + 2) + "CertificateStoreName  = `"" + $binding.CertificateStoreName + "`";`r`n"     
-            }       
-            $currentBinding += "`t" * ($depth + 1) + "}"
+            $currentBinding += "`t" * ($depth + 2) + "}"
 
             $results.BindingInfo += $currentBinding
         }
 
-        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 1) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 1) + "{`r`n"
+        $results.LogCustomFields = @();
+
+        [string]$LogCustomFields = $null
+        foreach ($customfield in $webSite.logfile.customFields.Collection)
+        {   
+            $LogCustomFields += "`r`n" + "`t" * ($depth + 2) + "MSFT_xLogCustomFieldInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+            $LogCustomFields += "`t" * ($depth + 3) + "logFieldName = `"$($customfield.logFieldName)`";`r`n"
+            $LogCustomFields += "`t" * ($depth + 3) + "sourceName = `"$($customfield.sourceName)`";`r`n"
+            $LogCustomFields += "`t" * ($depth + 3) + "sourceType = `"$($customfield.sourceType)`";`r`n"
+            $LogCustomFields += "`t" * ($depth + 2) + "}"
+        }
+
+        $results.LogCustomFields = $LogCustomFields
+
+        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
                 
         $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
 
@@ -158,9 +192,9 @@ function Read-xWebsite($depth = 2)
                 -Name enabled `
                 -Location $location
             Write-Verbose "$authenticationtype : $($prop.Value)"
-            $AuthenticationInfo += "`t" * ($depth + 2) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+            $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
         }
-        $AuthenticationInfo += "`t" * ($depth + 1) + "}"
+        $AuthenticationInfo += "`t" * ($depth + 2) + "}"
 
         $results.AuthenticationInfo = $AuthenticationInfo
         $results.LogFlags = $results.LogFlags.Split(",")
@@ -268,7 +302,8 @@ function Read-xWebApplication($depth = 2)
 
                 $results.AuthenticationInfo = $AuthenticationInfo
                 $results.SslFlags = $results.SslFlags.Split(",")
-                
+                $results.EnabledProtocols = $results.EnabledProtocols.Split(",")
+
                 Write-Verbose "All Parameters with values"
                 $results | ConvertTo-Json | Write-Verbose
 
@@ -391,8 +426,8 @@ function Get-ReverseDSC()
      <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
      $outputDSCFile = $OutputDSCPath + $fileName
      $Script:dscConfigContent | Out-File $outputDSCFile
-     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array
-     Get-Content $outputDSCFile | Where-Object {$_ -notmatch "LogCustomFields|LogtruncateSize"} | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
+     ((Get-Content $outputDSCFile).replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize")).replace("SslFlags = @()","#SslFlags = @()") | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
      Write-Output "Done."
      
      <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
