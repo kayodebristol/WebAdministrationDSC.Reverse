@@ -15,6 +15,8 @@ xWebAdministration version "2.3.0.0"
 
 .TAGS IIS,ReverseDSC
 
+.ICONURI https://github.com/Microsoft/WebAdministrationDSC.Reverse/raw/master/Images/WebAdministrationDSC.Reverse.png
+
 .RELEASENOTES
 
 RELEASE OWNER: Yagmur Sahin (Microsoft)
