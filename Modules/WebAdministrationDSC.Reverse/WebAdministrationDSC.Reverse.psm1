@@ -1,15 +1,15 @@
 <## Script Settings #>
 #$VerbosePreference = "Continue"
 
-<## Scripts Variables #>
-$Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
-$DSCModule = Get-Module -Name xWebAdministration -ListAvailable
-$Script:DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
-$Script:DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
-$Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
-
 function Export-WebAdministrationDSC
 {
+    <## Scripts Variables #>
+    $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
+    $DSCModule = Get-Module -Name xWebAdministration -ListAvailable
+    $Script:DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
+    $Script:DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
+    $Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
+
     <## Call into our main function that is responsible for extracting all the information about our environment; #>
     Orchestrator
 
@@ -81,6 +81,12 @@ function Orchestrator
     Write-Host "Scanning WebApplication..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-WebApplication
 
+    Write-Host "Scanning WebApplicationHandler..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-WebApplicationHandler
+
+    Write-Host "Scanning IISFeatureDelegation..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-IISFeatureDelegation
+
     $Script:dscConfigContent += "`r`n    }`r`n"           
     $Script:dscConfigContent += "}`r`n"
 
@@ -91,6 +97,63 @@ function Orchestrator
 }
 
 #region Reverse Functions
+
+function Read-WebApplicationHandler
+{
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_WebApplicationHandler\MSFT_WebApplicationHandler.psm1")
+    Import-Module $module
+    $params = Get-DSCFakeParameters -ModulePath $module
+
+    $handlers = Get-WebConfigurationProperty -Filter "system.webServer/handlers/Add" -Name '.'
+
+    foreach ($handler in $handlers)
+    {
+        $params.Name = $handler.name
+        $params.Path = "IIS://"
+        $params.Location = $handler.location
+        $results = Get-TargetResource @params
+        $Script:DSCConfigContent += "        WebApplicationHandler " + (New-Guid).ToString() + "`r`n            {`r`n"
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+        $Script:DSCConfigContent += "        }`r`n"
+    }
+}
+
+function Read-IISFeatureDelegation
+{
+    Get-IISFeatureDelegation -Path "system.webServer/*"
+}
+
+function Get-IISFeatureDelegation($Path)
+{
+    $module = Resolve-Path ("C:\program files\windowspowershell\modules\xwebadministration\2.7.0.0\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
+    Import-Module $module
+    $ConfigSections = Get-WebConfiguration -Filter $Path -Metadata -Recurse
+
+    foreach ($section in $ConfigSections)
+    {
+        $params = Get-DSCFakeParameters -ModulePath $module
+        $params.Filter = $section.SectionPath.Remove(0,1)
+        $params.Path = "MACHINE/WEBROOT/APPHOST"
+
+        try
+        {
+            $results = Get-TargetResource @params
+            $Script:DSCConfigContent += "        xIISFeatureDelegation " + (New-Guid).ToString() + "`r`n        {`r`n"
+            $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+            $Script:DSCConfigContent += "        }`r`n"
+
+    
+            $ChildPath = $section.SectionPath.Remove(0,1) + "/*"
+            $ConfigSections = Get-WebConfiguration -Filter $ChildPath -Metadata -Recurse
+            if ($null -ne $ConfigSections)
+            {
+                Get-IISFeatureDelegation -Path $ChildPath
+            }
+        }
+        catch{}
+    }
+}
+
 function Read-Website()
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
@@ -223,8 +286,9 @@ function Read-WebVirtualDirectory()
                 Write-Verbose "All Parameters with values"
                 $results | ConvertTo-Json | Write-Verbose
 
-                $Script:dscConfigContent += "`r`n"
+                $Script:dscConfigContent += "            xWebVirtualDirectory " + (New-Guid).ToString() + "`r`n            {`r`n"
                 $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $Script:dscConfigContent += "            }`r`n"
             }
         }
     }
@@ -276,9 +340,8 @@ function Read-WebApplication()
                     -Name enabled `
                     -PSPath "IIS:\Sites\$location"
                     Write-Verbose "$authenticationtype : $($prop.Value)"
-                    $AuthenticationInfo += "    $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+                    $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
                 }
-                $AuthenticationInfo += "            }"
 
                 $results.AuthenticationInfo = $AuthenticationInfo
                 $results.SslFlags = $results.SslFlags.Split(",")
@@ -313,8 +376,6 @@ function Read-WebAppPool()
 
         $results = Get-TargetResource @params
 
-        Write-Verbose "All Parameters as follows"
-        $results | ConvertTo-Json | Write-Verbose
 
         if($appPool.ProcessModel -eq "SpecificUser")
         {
@@ -344,7 +405,7 @@ function Set-ConfigurationData
     $Script:dscConfigContent += "`$ConfigData = @{`r`n"
     $Script:dscConfigContent += "    AllNodes = @(`r`n"
 
-    $tempConfigDataContent += "    @{`r`n"
+    $tempConfigDataContent = "    @{`r`n"
     $tempConfigDataContent += "        NodeName = `"$env:COMPUTERNAME`";`r`n"
     $tempConfigDataContent += "        PSDscAllowPlainTextPassword = `$true;`r`n"
     $tempConfigDataContent += "        PSDscAllowDomainUser = `$true;`r`n"
