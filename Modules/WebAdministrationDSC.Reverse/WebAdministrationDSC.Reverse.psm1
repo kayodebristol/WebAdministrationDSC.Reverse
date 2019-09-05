@@ -1,39 +1,3 @@
-<#PSScriptInfo
-
-.VERSION 1.2.1.1
-
-.GUID 8e576300-141f-4381-96ea-a59d1f2837d2
-
-.AUTHOR Microsoft Corporation
-
-.COMPANYNAME Microsoft
-
-.EXTERNALMODULEDEPENDENCIES
-
-.TAGS IIS,ReverseDSC,DesiredStateConfiguration,DSC,DSCResourceKit,DSCResource
-
-.ICONURI https://github.com/Microsoft/WebAdministrationDSC.Reverse/raw/master/Images/WebAdministrationDSC.Reverse.png
-
-.RELEASENOTES
-
-WebApplication Enabledprotocols string property comes from output converted to array
-Cmdletbinding attribute added to enable common variables
-Default verbose level removed
-
-#>
-
-#Requires -Modules @{ModuleName="ReverseDSC";ModuleVersion="1.9.3.0"},@{ModuleName="xWebAdministration";ModuleVersion="2.4.0.0"}
-
-<# 
-.DESCRIPTION 
- Extracts the DSC Configuration of an existing IIS environment, allowing you to analyze it or to replicate it.
-
-#> 
-
-[CmdletBinding(ConfirmImpact='Low')]
-
-param()
-
 <## Script Settings #>
 #$VerbosePreference = "Continue"
 
@@ -44,13 +8,47 @@ $Script:DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynami
 $Script:DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
 $Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
 
-<# Retrieves Information about the current script from the PSScriptInfo section above #>
-try {
-    $currentScript = Test-ScriptFileInfo $SCRIPT:MyInvocation.MyCommand.Path
-    $Script:version = $currentScript.Version.ToString()
-}
-catch {
-    $Script:version = "N/A"
+function Export-WebAdministrationDSC
+{
+    <## Call into our main function that is responsible for extracting all the information about our environment; #>
+    Orchestrator
+
+    <## Prompts the user to specify the FOLDER path where the resulting PowerShell DSC Configuration Script will be saved. #>
+    $fileName = "WebAdministrationDSC.ps1"
+    $OutputDSCPath = Read-Host "Please enter the full path of the output folder for DSC Configuration (will be created as necessary)"
+    
+    <## Ensures the specified output folder path actually exists; if not, tries to create it and throws an exception if we can't. ##>
+    while (!(Test-Path -Path $OutputDSCPath -PathType Container -ErrorAction SilentlyContinue))
+    {
+        try
+        {
+            Write-Output "Directory `"$OutputDSCPath`" doesn't exist; creating..."
+            New-Item -Path $OutputDSCPath -ItemType Directory | Out-Null
+            if ($?) {break}
+        }
+        catch
+        {
+            Write-Warning "$($_.Exception.Message)"
+            Write-Warning "Could not create folder $OutputDSCPath!"
+        }
+        $OutputDSCPath = Read-Host "Please Enter Output Folder for DSC Configuration (Will be Created as Necessary)"
+    }
+    <## Ensures the path we specify ends with a Slash, in order to make sure the resulting file path is properly structured. #>
+    if(!$OutputDSCPath.EndsWith("\") -and !$OutputDSCPath.EndsWith("/"))
+    {
+        $OutputDSCPath += "\"
+    }
+
+     <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
+     $outputDSCFile = $OutputDSCPath + $fileName
+     $Script:dscConfigContent | Out-File $outputDSCFile
+     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
+     ((Get-Content $outputDSCFile).replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize")).replace("SslFlags = @()","#SslFlags = @()") | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
+     Write-Output "Done."
+     
+     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
+     Start-Sleep 2
+     Invoke-Item -Path $OutputDSCPath
 }
 
 <## This is the main function for this script. It acts as a call dispatcher, calling the various functions required in the proper order to 
@@ -71,17 +69,17 @@ function Orchestrator
     $Script:dscConfigContent += "    Node `$Allnodes.nodename`r`n"
     $Script:dscConfigContent += "    {`r`n"
 
-    Write-Host "Scanning xWebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
-    Read-xWebAppPool
+    Write-Host "Scanning WebAppPool..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-WebAppPool
     
-    Write-Host "Scanning xWebsite..." -BackgroundColor DarkGreen -ForegroundColor White
-    Read-xWebsite
+    Write-Host "Scanning Website..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-Website
 
-    Write-Host "Scanning xWebVirtualDirectory..." -BackgroundColor DarkGreen -ForegroundColor White
-    Read-xWebVirtualDirectory
+    Write-Host "Scanning WebVirtualDirectory..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-WebVirtualDirectory
 
-    Write-Host "Scanning xWebApplication..." -BackgroundColor DarkGreen -ForegroundColor White
-    Read-xWebApplication
+    Write-Host "Scanning WebApplication..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-WebApplication
 
     Write-Host "Configuring Local Configuration Manager (LCM)..." -BackgroundColor DarkGreen -ForegroundColor White
     Set-LCM
@@ -108,7 +106,7 @@ function Orchestrator
 }
 
 #region Reverse Functions
-function Read-xWebsite($depth = 2)
+function Read-Website($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
     Import-Module $module
@@ -169,7 +167,7 @@ function Read-xWebsite($depth = 2)
         [string]$LogCustomFields = $null
         foreach ($customfield in $webSite.logfile.customFields.Collection)
         {   
-            $LogCustomFields += "`r`n" + "`t" * ($depth + 2) + "MSFT_xLogCustomFieldInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+            $LogCustomFields += "`r`n" + "`t" * ($depth + 2) + "MSFT_LogCustomFieldInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
             $LogCustomFields += "`t" * ($depth + 3) + "logFieldName = `"$($customfield.logFieldName)`";`r`n"
             $LogCustomFields += "`t" * ($depth + 3) + "sourceName = `"$($customfield.sourceName)`";`r`n"
             $LogCustomFields += "`t" * ($depth + 3) + "sourceType = `"$($customfield.sourceType)`";`r`n"
@@ -208,7 +206,7 @@ function Read-xWebsite($depth = 2)
     }
 }
 
-function Read-xWebVirtualDirectory($depth = 2)
+function Read-WebVirtualDirectory($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
     Import-Module $module
@@ -250,7 +248,7 @@ function Read-xWebVirtualDirectory($depth = 2)
     }
 }
 
-function Read-xWebApplication($depth = 2)
+function Read-WebApplication($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
     Import-Module $module
@@ -316,7 +314,7 @@ function Read-xWebApplication($depth = 2)
     }
 }
 
-function Read-xWebAppPool($depth = 2)
+function Read-WebAppPool($depth = 2)
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
     Import-Module $module
@@ -378,7 +376,7 @@ function Set-ConfigurationData
 function Set-Imports
 {
     $Script:dscConfigContent += "    Import-DscResource -ModuleName PSDesiredStateConfiguration`r`n"
-    $Script:dscConfigContent += "    Import-DscResource -ModuleName xWebAdministration -ModuleVersion `"" + $Script:DSCVersion  + "`"`r`n"
+    $Script:dscConfigContent += "    Import-DscResource -ModuleName WebAdministration -ModuleVersion `"" + $Script:DSCVersion  + "`"`r`n"
 }
 
 <## This function sets the settings for the Local Configuration Manager (LCM) component on the server we will be configuring using our resulting DSC Configuration script. The LCM component is the one responsible for orchestrating all DSC configuration related activities and processes on a server. This method specifies settings telling the LCM to not hesitate rebooting the server we are configurating automatically if it requires a reboot (i.e. During the SharePoint Prerequisites installation). Setting this value helps reduce the amount of manual interaction that is required to automate the configuration of our SharePoint farm using our resulting DSC Configuration script. #>
@@ -389,50 +387,3 @@ function Set-LCM
     $Script:dscConfigContent += "            RebootNodeIfNeeded = `$True`r`n"
     $Script:dscConfigContent += "        }`r`n"
 }
-
-
-<# This function is responsible for saving the output file onto disk. #>
-function Get-ReverseDSC()
-{
-    <## Call into our main function that is responsible for extracting all the information about our environment; #>
-    Orchestrator
-
-    <## Prompts the user to specify the FOLDER path where the resulting PowerShell DSC Configuration Script will be saved. #>
-    $fileName = "WebAdministrationDSC.ps1"
-    $OutputDSCPath = Read-Host "Please enter the full path of the output folder for DSC Configuration (will be created as necessary)"
-    
-    <## Ensures the specified output folder path actually exists; if not, tries to create it and throws an exception if we can't. ##>
-    while (!(Test-Path -Path $OutputDSCPath -PathType Container -ErrorAction SilentlyContinue))
-    {
-        try
-        {
-            Write-Output "Directory `"$OutputDSCPath`" doesn't exist; creating..."
-            New-Item -Path $OutputDSCPath -ItemType Directory | Out-Null
-            if ($?) {break}
-        }
-        catch
-        {
-            Write-Warning "$($_.Exception.Message)"
-            Write-Warning "Could not create folder $OutputDSCPath!"
-        }
-        $OutputDSCPath = Read-Host "Please Enter Output Folder for DSC Configuration (Will be Created as Necessary)"
-    }
-    <## Ensures the path we specify ends with a Slash, in order to make sure the resulting file path is properly structured. #>
-    if(!$OutputDSCPath.EndsWith("\") -and !$OutputDSCPath.EndsWith("/"))
-    {
-        $OutputDSCPath += "\"
-    }
-
-     <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
-     $outputDSCFile = $OutputDSCPath + $fileName
-     $Script:dscConfigContent | Out-File $outputDSCFile
-     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
-     ((Get-Content $outputDSCFile).replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize")).replace("SslFlags = @()","#SslFlags = @()") | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
-     Write-Output "Done."
-     
-     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
-     Start-Sleep 2
-     Invoke-Item -Path $OutputDSCPath
-}
-
-Get-ReverseDSC
