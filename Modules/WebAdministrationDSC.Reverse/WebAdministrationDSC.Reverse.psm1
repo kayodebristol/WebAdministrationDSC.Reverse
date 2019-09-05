@@ -81,9 +81,6 @@ function Orchestrator
     Write-Host "Scanning WebApplication..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-WebApplication
 
-    Write-Host "Configuring Local Configuration Manager (LCM)..." -BackgroundColor DarkGreen -ForegroundColor White
-    Set-LCM
-
     $Script:dscConfigContent += "`r`n    }`r`n"           
     $Script:dscConfigContent += "}`r`n"
 
@@ -91,22 +88,10 @@ function Orchestrator
     Set-ConfigurationData
 
     $Script:dscConfigContent += "$Script:configName -ConfigurationData `$ConfigData"
-    $Script:dscConfigContent += "`r`n`r`n<#"
-    $Script:dscConfigContent += "`r`n`t"
-    $Script:dscConfigContent += "Remove-DscConfigurationDocument -Stage Pending,Current,Previous -Force"
-    $Script:dscConfigContent += "`r`n`t"
-    $Script:dscConfigContent += "Start-DscConfiguration -Path .\$Script:configName -Verbose -Wait"
-    $Script:dscConfigContent += "`r`n`t"
-    $Script:dscConfigContent += "Test-DscConfiguration -Verbose"
-    $Script:dscConfigContent += "`r`n`t"
-    $Script:dscConfigContent += "Get-DscConfigurationStatus"
-    $Script:dscConfigContent += "`r`n`t"
-    $Script:dscConfigContent += "Get-DscConfigurationStatus -All"
-    $Script:dscConfigContent += "`r`n#>"
 }
 
 #region Reverse Functions
-function Read-Website($depth = 2)
+function Read-Website()
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
     Import-Module $module
@@ -130,9 +115,9 @@ function Read-Website($depth = 2)
 
         foreach($binding in $website.Bindings.Collection)
         {
-            $currentBinding = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebBindingInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
-            $currentBinding += "`t" * ($depth + 3) + "Protocol = `"$($binding.Protocol)`"" + ";`r`n"
-            $currentBinding += "`t" * ($depth + 3) + "SslFlags = $($binding.sslFlags)" + ";`r`n"
+            $currentBinding = "MSFT_xWebBindingInformation`r`n            {`r`n"
+            $currentBinding += "                Protocol = `"$($binding.Protocol)`"" + "`r`n"
+            $currentBinding += "                SslFlags = $($binding.sslFlags)" + "`r`n"
 
             if ($binding.protocol -match "^http")
             {
@@ -140,24 +125,24 @@ function Read-Website($depth = 2)
                 $ipAddress = $bindingInfo[0]
                 $port = $bindingInfo[1]
                 $hostName = $bindingInfo[2]
-                $currentBinding += "`t" * ($depth + 3) + "IPAddress = `"$ipAddress`"" + ";`r`n"
-                $currentBinding += "`t" * ($depth + 3) + "Port = $port" + ";`r`n"
-                $currentBinding += "`t" * ($depth + 3) + "Hostname = `"$hostName`"" + ";`r`n"
+                $currentBinding += "                IPAddress = `"$ipAddress`"" + ";`r`n"
+                $currentBinding += "                Port = $port" + ";`r`n"
+                $currentBinding += "                Hostname = `"$hostName`"" + ";`r`n"
                 if ($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
                 {
                     if ($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
                     {
-                        $currentBinding += "`t" * ($depth + 3) + "CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
+                        $currentBinding += "                CertificateThumbprint = `"$($binding.CertificateHash)`"`r`n"
                     }
-                    $currentBinding += "`t" * ($depth + 3) + "CertificateStoreName = `"$($binding.CertificateStoreName)`";`r`n"     
+                    $currentBinding += "                CertificateStoreName = `"$($binding.CertificateStoreName)`"`r`n"     
                 }       
             }
             else
             {
-                $currentBinding += "`t" * ($depth + 3) + "BindingInformation = `"$($binding.bindingInformation)`"" + ";`r`n"
+                $currentBinding += "                BindingInformation = `"$($binding.bindingInformation)`"" + ";`r`n"
             }
 
-            $currentBinding += "`t" * ($depth + 2) + "}"
+            $currentBinding += "            }"
 
             $results.BindingInfo += $currentBinding
         }
@@ -167,16 +152,16 @@ function Read-Website($depth = 2)
         [string]$LogCustomFields = $null
         foreach ($customfield in $webSite.logfile.customFields.Collection)
         {   
-            $LogCustomFields += "`r`n" + "`t" * ($depth + 2) + "MSFT_LogCustomFieldInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
-            $LogCustomFields += "`t" * ($depth + 3) + "logFieldName = `"$($customfield.logFieldName)`";`r`n"
-            $LogCustomFields += "`t" * ($depth + 3) + "sourceName = `"$($customfield.sourceName)`";`r`n"
-            $LogCustomFields += "`t" * ($depth + 3) + "sourceType = `"$($customfield.sourceType)`";`r`n"
-            $LogCustomFields += "`t" * ($depth + 2) + "}"
+            $LogCustomFields += "MSFT_LogCustomFieldInformation`r`n{`r`n"
+            $LogCustomFields += "    logFieldName = `"$($customfield.logFieldName)`"`r`n"
+            $LogCustomFields += "    sourceName = `"$($customfield.sourceName)`"`r`n"
+            $LogCustomFields += "`    sourceType = `"$($customfield.sourceType)`"`r`n"
+            $LogCustomFields += "}"
         }
 
         $results.LogCustomFields = $LogCustomFields
 
-        $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+        $AuthenticationInfo = "MSFT_xWebAuthenticationInformation`r`n            {`r`n"
                 
         $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
 
@@ -190,9 +175,8 @@ function Read-Website($depth = 2)
                 -Name enabled `
                 -Location $location
             Write-Verbose "$authenticationtype : $($prop.Value)"
-            $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+            $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + "`r`n"
         }
-        $AuthenticationInfo += "`t" * ($depth + 2) + "}"
 
         $results.AuthenticationInfo = $AuthenticationInfo
         $results.LogFlags = $results.LogFlags.Split(",")
@@ -200,13 +184,13 @@ function Read-Website($depth = 2)
         Write-Verbose "All Parameters with values"
         $results | ConvertTo-Json | Write-Verbose
 
-        $Script:dscConfigContent += "`r`n"
-        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
-            -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($website.name)"
+        $Script:dscConfigContent += "        xWebSite " + (New-Guid).ToString() + "`r`n        {`r`n"
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+        $Script:dscConfigContent += "        }`r`n"
     }
 }
 
-function Read-WebVirtualDirectory($depth = 2)
+function Read-WebVirtualDirectory()
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
     Import-Module $module
@@ -240,15 +224,13 @@ function Read-WebVirtualDirectory($depth = 2)
                 $results | ConvertTo-Json | Write-Verbose
 
                 $Script:dscConfigContent += "`r`n"
-                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
-                    -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($website.name)$($webvirtualdirectory.path)" `
-                    -DependsOnClause "[xWebSite]$($website.name)" 
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
             }
         }
     }
 }
 
-function Read-WebApplication($depth = 2)
+function Read-WebApplication()
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
     Import-Module $module
@@ -280,7 +262,7 @@ function Read-WebApplication($depth = 2)
                 Write-Verbose "All Parameters as follows"
                 $results | ConvertTo-Json | Write-Verbose
 
-                $AuthenticationInfo = "`r`n" + "`t" * ($depth + 2) + "MSFT_xWebApplicationAuthenticationInformation`r`n" + "`t" * ($depth + 2) + "{`r`n"
+                $AuthenticationInfo = "MSFT_xWebApplicationAuthenticationInformation`r`n            {`r`n"
                 
                 $AuthenticationTypes = @("BasicAuthentication","AnonymousAuthentication","DigestAuthentication","WindowsAuthentication")
 
@@ -294,9 +276,9 @@ function Read-WebApplication($depth = 2)
                     -Name enabled `
                     -PSPath "IIS:\Sites\$location"
                     Write-Verbose "$authenticationtype : $($prop.Value)"
-                    $AuthenticationInfo += "`t" * ($depth + 3) + "$($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+                    $AuthenticationInfo += "    $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
                 }
-                $AuthenticationInfo += "`t" * ($depth + 2) + "}"
+                $AuthenticationInfo += "            }"
 
                 $results.AuthenticationInfo = $AuthenticationInfo
                 $results.SslFlags = $results.SslFlags.Split(",")
@@ -305,16 +287,15 @@ function Read-WebApplication($depth = 2)
                 Write-Verbose "All Parameters with values"
                 $results | ConvertTo-Json | Write-Verbose
 
-                $Script:dscConfigContent += "`r`n"
-                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
-                    -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($website.name)$($webapplication.path)" `
-                    -DependsOnClause "[xWebSite]$($website.name)"
+                $Script:dscConfigContent += "        xWebApplication " + (New-GUID).ToString() + "`r`n        {`r`n"
+                $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $Script:dscConfigContent += "        }`r`n"
             }
         }
     }
 }
 
-function Read-WebAppPool($depth = 2)
+function Read-WebAppPool()
 {    
     $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
     Import-Module $module
@@ -350,8 +331,9 @@ function Read-WebAppPool($depth = 2)
         $results | ConvertTo-Json | Write-Verbose
 
         $Script:dscConfigContent += "`r`n"
-        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource `
-            -Indent $depth -AsFullConfigurationBlock -FriendlyBlockName "$($appPool.Name)"
+        $Script:dscConfigContent += "        xWebAppPool " + (New-Guid).ToString() + "`r`n        {`r`n"
+        $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+        $Script:dscConfigContent += "        }`r`n"
     }
 }
 #endregion
@@ -376,14 +358,5 @@ function Set-ConfigurationData
 function Set-Imports
 {
     $Script:dscConfigContent += "    Import-DscResource -ModuleName PSDesiredStateConfiguration`r`n"
-    $Script:dscConfigContent += "    Import-DscResource -ModuleName WebAdministration -ModuleVersion `"" + $Script:DSCVersion  + "`"`r`n"
-}
-
-<## This function sets the settings for the Local Configuration Manager (LCM) component on the server we will be configuring using our resulting DSC Configuration script. The LCM component is the one responsible for orchestrating all DSC configuration related activities and processes on a server. This method specifies settings telling the LCM to not hesitate rebooting the server we are configurating automatically if it requires a reboot (i.e. During the SharePoint Prerequisites installation). Setting this value helps reduce the amount of manual interaction that is required to automate the configuration of our SharePoint farm using our resulting DSC Configuration script. #>
-function Set-LCM
-{
-    $Script:dscConfigContent += "        LocalConfigurationManager"  + "`r`n"
-    $Script:dscConfigContent += "        {`r`n"
-    $Script:dscConfigContent += "            RebootNodeIfNeeded = `$True`r`n"
-    $Script:dscConfigContent += "        }`r`n"
+    $Script:dscConfigContent += "    Import-DscResource -ModuleName xWebAdministration -ModuleVersion `"" + $Script:DSCVersion  + "`"`r`n"
 }
