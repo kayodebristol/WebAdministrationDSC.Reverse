@@ -87,6 +87,9 @@ function Orchestrator
     Write-Host "Scanning IISFeatureDelegation..." -BackgroundColor DarkGreen -ForegroundColor White
     Read-IISFeatureDelegation
 
+    Write-Host "Scanning IISLogging..." -BackgroundColor DarkGreen -ForegroundColor White
+    Read-IISLogging
+
     $Script:dscConfigContent += "`r`n    }`r`n"           
     $Script:dscConfigContent += "}`r`n"
 
@@ -112,10 +115,26 @@ function Read-WebApplicationHandler
         $params.Path = "IIS://"
         $params.Location = $handler.location
         $results = Get-TargetResource @params
-        $Script:DSCConfigContent += "        WebApplicationHandler " + (New-Guid).ToString() + "`r`n            {`r`n"
+        $Script:DSCConfigContent += "        WebApplicationHandler " + (New-Guid).ToString() + "`r`n        {`r`n"
         $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
         $Script:DSCConfigContent += "        }`r`n"
     }
+}
+
+function Read-IISLogging
+{
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xIISLogging\MSFT_xIISLogging.psm1")
+    Import-Module $module
+    $params = Get-DSCFakeParameters -ModulePath $module
+
+    $LogSettings = Get-WebConfiguration -Filter '/system.applicationHost/sites/siteDefaults/Logfile'
+
+    $params.LogPath = $LogSettings.directory
+    $results = Get-TargetResource @params
+    $results.LogFlags = $results.LogFlags.Split(',')
+    $Script:DSCConfigContent += "        xIISLogging " + (New-Guid).ToString() + "`r`n        {`r`n"
+    $Script:dscConfigContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+    $Script:DSCConfigContent += "        }`r`n"
 }
 
 function Read-IISFeatureDelegation
