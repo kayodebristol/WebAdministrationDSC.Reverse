@@ -144,7 +144,7 @@ function Read-IISFeatureDelegation
 
 function Get-IISFeatureDelegation($Path)
 {
-    $module = Resolve-Path ("C:\program files\windowspowershell\modules\xwebadministration\2.7.0.0\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
+    $module = Resolve-Path ($Script:DSCPath + "\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
     Import-Module $module
     $ConfigSections = Get-WebConfiguration -Filter $Path -Metadata -Recurse
 
