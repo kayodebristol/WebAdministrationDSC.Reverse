@@ -3,19 +3,21 @@
 
 function Export-WebAdministrationDSC
 {
+    param(
+        <## Prompts the user to specify the FOLDER path where the resulting PowerShell DSC Configuration Script will be saved. #>
+        [Parameter(
+            Mandatory=$false, 
+            HelpMessage = "Specify the FOLDER path where the resulting PowerShell DSC Configuration Script will be saved."
+        )][string]$OutputDSCPath = $(Read-Host "Please Enter Output Folder for DSC Configuration (Will be Created as Necessary)")
+    )
     <## Scripts Variables #>
     $Script:dscConfigContent = "" # Core Variable that will contain the content of your DSC output script. Leave empty;
     $DSCModule = Get-Module -Name xWebAdministration -ListAvailable
     $Script:DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder;
     $Script:DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
     $Script:configName = "IISConfiguration" # Name of the output configuration. This will be the name that follows the Configuration keyword in the output script;
-
-    <## Call into our main function that is responsible for extracting all the information about our environment; #>
-    Orchestrator
-
-    <## Prompts the user to specify the FOLDER path where the resulting PowerShell DSC Configuration Script will be saved. #>
     $fileName = "WebAdministrationDSC.ps1"
-    $OutputDSCPath = Read-Host "Please enter the full path of the output folder for DSC Configuration (will be created as necessary)"
+    
     
     <## Ensures the specified output folder path actually exists; if not, tries to create it and throws an exception if we can't. ##>
     while (!(Test-Path -Path $OutputDSCPath -PathType Container -ErrorAction SilentlyContinue))
@@ -31,7 +33,7 @@ function Export-WebAdministrationDSC
             Write-Warning "$($_.Exception.Message)"
             Write-Warning "Could not create folder $OutputDSCPath!"
         }
-        $OutputDSCPath = Read-Host "Please Enter Output Folder for DSC Configuration (Will be Created as Necessary)"
+        
     }
     <## Ensures the path we specify ends with a Slash, in order to make sure the resulting file path is properly structured. #>
     if(!$OutputDSCPath.EndsWith("\") -and !$OutputDSCPath.EndsWith("/"))
@@ -41,6 +43,10 @@ function Export-WebAdministrationDSC
 
      <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
      $outputDSCFile = $OutputDSCPath + $fileName
+
+    <## Call into our main function that is responsible for extracting all the information about our environment; #>
+    Orchestrator     
+
      $Script:dscConfigContent | Out-File $outputDSCFile
      #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
      ((Get-Content $outputDSCFile).replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize")).replace("SslFlags = @()","#SslFlags = @()") | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
