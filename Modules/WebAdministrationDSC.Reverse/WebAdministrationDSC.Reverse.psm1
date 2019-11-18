@@ -26,7 +26,7 @@ function Export-WebAdministrationDSC
     $DSCPath = $DSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder; 
     $DSCPath = ($DSCPath -replace '(^\w)(:)', "\\$($env:computername)\$('$1')$") 
     
-    $ReverseDSCPath = $ReverseDSCModule | Select-Object -ExpandProperty modulebase # Dynamic path to include the version number as a folder; 
+    $ReverseDSCPath = $ReverseDSCModule | Select-Object -ExpandProperty path # Dynamic path to include the version number as a folder; 
     $ReverseDSCPath = ($ReverseDSCPath -replace '(^\w)(:)', "\\$($env:computername)\$('$1')$") 
     
     $DSCVersion = ($DSCModule | Select-Object -ExpandProperty version).ToString() # Version of the DSC module for the technology (e.g. 1.0.0.0);
@@ -246,7 +246,7 @@ function Export-WebAdministrationDSC
 
                 foreach ($authenticationtype in $AuthenticationTypes)
                 {
-                    Remove-Variable -Name location -ErrorAction SilentlyContinue
+                    Remove-Variable -Name location -ErrorALogCustomFieldsction SilentlyContinue
                     Remove-Variable -Name prop -ErrorAction SilentlyContinue
                     $location = $website.Name
                     $prop = Get-WebConfigurationProperty `
@@ -482,7 +482,7 @@ function Export-WebAdministrationDSC
         $dscConfigContent += "$configName -ConfigurationData `$ConfigData"
         
         #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
-        $dscConfigContent.replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize").replace("SslFlags = @()","#SslFlags = @()").Replace("$;", "$false;") | Out-File $outputDSCFile
+        ($dscConfigContent -replace ".*= ;", "#$&").replace("LogtruncateSize","#LogtruncateSize").Replace("$;", "$false;") | Out-File $outputDSCFile
         
 
       
@@ -511,7 +511,7 @@ function Export-WebAdministrationDSC
         Invoke-Command -ScriptBlock $Orchestrator -Session $session -AsJob -JobName $Computer -ArgumentList $argList | Out-Null
     }
 
-    <#do{
+    do{
         Start-Sleep -Seconds 5
         $jobsRunning = (Get-Job | Where-Object{$_.state -eq "Running" } ).count
         $jobsCompleted = (Get-Job | Where-Object{$_.state -eq "Completed" } ).count
@@ -524,7 +524,7 @@ function Export-WebAdministrationDSC
     }while($jobsCompleted -ne $jobsTotal)        
     
     get-job -ErrorAction SilentlyContinue | Remove-Job -Force -ErrorAction SilentlyContinue
-#>
+
     Write-Output "Done."
     
     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
