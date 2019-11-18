@@ -39,16 +39,14 @@ function Export-WebAdministrationDSC
         $OutputDSCPath += "\"
     }
 
-     <## Save the content of the resulting DSC Configuration file into a file at the specified path. #>
-     $outputDSCFile = $OutputDSCPath + $fileName
-     $Script:dscConfigContent | Out-File $outputDSCFile
-     #Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.
-     ((Get-Content $outputDSCFile).replace("LogCustomFields = @()","#LogCustomFields = @()").replace("LogtruncateSize","#LogtruncateSize")).replace("SslFlags = @()","#SslFlags = @()") | Out-File $outputDSCFile.Replace(".ps1",".modified.ps1")
-     Write-Output "Done."
+    <## Save the content of the resulting DSC Configuration file into a file at the specified path. 
+    Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.#>
+    $outputDSCFile = $OutputDSCPath + $fileName
+    ($dscConfigContent -replace ".*= ;", "#$&").replace("LogtruncateSize","#LogtruncateSize").Replace("$;", "$false;") | Out-File $outputDSCFile
      
-     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
-     Start-Sleep 2
-     Invoke-Item -Path $OutputDSCPath
+    <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
+    Start-Sleep 2
+    Invoke-Item -Path $OutputDSCPath
 }
 
 <## This is the main function for this script. It acts as a call dispatcher, calling the various functions required in the proper order to 
@@ -144,7 +142,7 @@ function Read-IISFeatureDelegation
 
 function Get-IISFeatureDelegation($Path)
 {
-    $module = Resolve-Path ("C:\program files\windowspowershell\modules\xwebadministration\2.7.0.0\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
+    $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
     Import-Module $module
     $ConfigSections = Get-WebConfiguration -Filter $Path -Metadata -Recurse
 
@@ -234,7 +232,7 @@ function Read-Website()
         [string]$LogCustomFields = $null
         foreach ($customfield in $webSite.logfile.customFields.Collection)
         {   
-            $LogCustomFields += "MSFT_LogCustomFieldInformation`r`n{`r`n"
+            $LogCustomFields += "`r`nMSFT_LogCustomFieldInformation`r`n{`r`n"
             $LogCustomFields += "    logFieldName = `"$($customfield.logFieldName)`"`r`n"
             $LogCustomFields += "    sourceName = `"$($customfield.sourceName)`"`r`n"
             $LogCustomFields += "`    sourceType = `"$($customfield.sourceType)`"`r`n"
@@ -296,7 +294,7 @@ function Read-WebVirtualDirectory()
                 $params.WebApplication = ""
                 $params.Website = $website.Name
                 <# Setting Required Keys #>
-                #$params.PhysicalPath  = $webapplication.PhysicalPath
+                $params.PhysicalPath  = $webapplication.PhysicalPath
                 Write-Verbose "Key parameters as follows"
                 $params | ConvertTo-Json | Write-Verbose
                 
@@ -359,7 +357,7 @@ function Read-WebApplication()
                     -Name enabled `
                     -PSPath "IIS:\Sites\$location"
                     Write-Verbose "$authenticationtype : $($prop.Value)"
-                    $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
+                    $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + "`r`n            }`r`n"
                 }
 
                 $results.AuthenticationInfo = $AuthenticationInfo
