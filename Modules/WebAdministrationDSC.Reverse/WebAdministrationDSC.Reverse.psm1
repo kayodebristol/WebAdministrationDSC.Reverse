@@ -41,9 +41,13 @@ function Export-WebAdministrationDSC
 
     <## Save the content of the resulting DSC Configuration file into a file at the specified path. 
     Prevent known-issues creating additional DSC Configuration file with modifications, this version removes some known-values with empty array or so.#>
-    $outputDSCFile = $OutputDSCPath + $fileName
-    ($dscConfigContent -replace ".*= ;", "#$&").replace("LogtruncateSize","#LogtruncateSize").Replace("$;", "$false;") | Out-File $outputDSCFile
-     
+    $dscConfigContent = ($dscConfigContent -replace ".*= ;", "#$&") 
+    $dscConfigContent = ($dscConfigContent -replace '(?ms)^";', '')
+    $dscConfigContent = ($dscConfigContent -replace "LogtruncateSize","#LogtruncateSize") 
+    $dscConfigContent = ($dscConfigContent -replace "$;", "$false;") 
+    $dscConfigContent = ($dscConfigContent -replace "`"MSFT_xWebApplicationAuthenticationInformation", "MSFT_xWebApplicationAuthenticationInformation")  
+    Out-File -InputObject $dscConfigContent -FilePath $OutputDSCFile
+ 
     <## Wait a couple of seconds, then open our $outputDSCPath in Windows Explorer so we can review the glorious output. ##>
     Start-Sleep 2
     Invoke-Item -Path $OutputDSCPath
@@ -360,7 +364,7 @@ function Read-WebApplication()
                     $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + "`r`n            }`r`n"
                 }
 
-                $results.AuthenticationInfo = $AuthenticationInfo
+                $results.AuthenticationInfo = $AuthenticationInfo + "`r`n            };`r`n" 
                 $results.SslFlags = $results.SslFlags.Split(",")
                 $results.EnabledProtocols = $results.EnabledProtocols.Split(",")
 
