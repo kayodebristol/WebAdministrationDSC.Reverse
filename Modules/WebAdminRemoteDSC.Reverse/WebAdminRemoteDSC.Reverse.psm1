@@ -1,7 +1,7 @@
 <## Script Settings #>
 #$VerbosePreference = "Continue"
 
-function Export-WebAdministrationDSC
+function Export-WebAdminRemoteDSC
 {
     param(
         <## Prompts the user to specify the FOLDER path where the resulting PowerShell DSC Configuration Script will be saved. #>
