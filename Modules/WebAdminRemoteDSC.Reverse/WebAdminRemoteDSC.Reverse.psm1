@@ -64,6 +64,8 @@ function Export-WebAdminRemoteDSC
             New-Variable -name $_.name -value $_.value -Force -ErrorAction:SilentlyContinue | Out-Null
         }
 
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force -ErrorAction SilentlyContinue | Out-Null
+
         $ReadWebApplicationHandler = {
             param($DSCPath)
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_WebApplicationHandler\MSFT_WebApplicationHandler.psm1")
