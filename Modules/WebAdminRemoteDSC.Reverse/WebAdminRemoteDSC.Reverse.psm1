@@ -105,8 +105,8 @@ function Export-WebAdminRemoteDSC
         }
 
         $ReadIISFeatureDelegation = {
-            param($path = "system.webServer/*", $DSCPath)
-            
+            param($path = "system.webServer/*", $DSCPath, $ReadIISFeatureDelegation)
+    
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
             Import-Module $module
             $ConfigSections = Get-WebConfiguration -Filter $Path -Metadata -Recurse
@@ -130,7 +130,7 @@ function Export-WebAdminRemoteDSC
                     $ConfigSections = Get-WebConfiguration -Filter $ChildPath -Metadata -Recurse
                     if ($null -ne $ConfigSections)
                     {
-                        $FeatureContent += $ReadIISFeatureDelegation.invoke($ChildPath, $DSCPath)
+                        $FeatureContent += $ReadIISFeatureDelegation.invoke($ChildPath, $DSCPath, $ReadIISFeatureDelegation)
                     }
                 }
                 catch{}
@@ -146,7 +146,8 @@ function Export-WebAdminRemoteDSC
             $params = Get-DSCFakeParameters -ModulePath $module
             
             $webSites = Get-WebSite
-
+            $webSites | Write-Verbose
+            $WebSiteContent = ""
             foreach($website in $webSites)
             {
                 Write-Verbose "WebSite: $($website.name)"
@@ -164,8 +165,8 @@ function Export-WebAdminRemoteDSC
                 foreach($binding in $website.Bindings.Collection)
                 {
                     $currentBinding = "MSFT_xWebBindingInformation`r`n            {`r`n"
-                    $currentBinding += "                Protocol = `"$($binding.Protocol)`"" + "`r`n"
-                    $currentBinding += "                SslFlags = $($binding.sslFlags)" + "`r`n"
+                    $currentBinding += "                Protocol = `'$($binding.Protocol)`'" + ";`r`n"
+                    $currentBinding += "                SslFlags = $($binding.sslFlags)" + ";`r`n"
 
                     if ($binding.protocol -match "^http")
                     {
@@ -173,21 +174,21 @@ function Export-WebAdminRemoteDSC
                         $ipAddress = $bindingInfo[0]
                         $port = $bindingInfo[1]
                         $hostName = $bindingInfo[2]
-                        $currentBinding += "                IPAddress = `"$ipAddress`"" + ";`r`n"
+                        $currentBinding += "                IPAddress = `'$ipAddress`'" + ";`r`n"
                         $currentBinding += "                Port = $port" + ";`r`n"
-                        $currentBinding += "                Hostname = `"$hostName`"" + ";`r`n"
+                        $currentBinding += "                Hostname = `'$hostName`'" + ";`r`n"
                         if ($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
                         {
                             if ($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
                             {
-                                $currentBinding += "                CertificateThumbprint = `"$($binding.CertificateHash)`"`r`n"
+                                $currentBinding += "                CertificateThumbprint = `'$($binding.CertificateHash)`';`r`n"
                             }
-                            $currentBinding += "                CertificateStoreName = `"$($binding.CertificateStoreName)`"`r`n"     
+                            $currentBinding += "                CertificateStoreName = `'$($binding.CertificateStoreName)`';`r`n"     
                         }       
                     }
                     else
                     {
-                        $currentBinding += "                BindingInformation = `"$($binding.bindingInformation)`"" + ";`r`n"
+                        $currentBinding += "                BindingInformation = `'$($binding.bindingInformation)`'" + ";`r`n"
                     }
 
                     $currentBinding += "            }"
@@ -201,9 +202,9 @@ function Export-WebAdminRemoteDSC
                 foreach ($customfield in $webSite.logfile.customFields.Collection)
                 {   
                     $LogCustomFields += "`r`nMSFT_LogCustomFieldInformation`r`n{`r`n"
-                    $LogCustomFields += "    logFieldName = `"$($customfield.logFieldName)`"`r`n"
-                    $LogCustomFields += "    sourceName = `"$($customfield.sourceName)`"`r`n"
-                    $LogCustomFields += "`    sourceType = `"$($customfield.sourceType)`"`r`n"
+                    $LogCustomFields += "    logFieldName = `'$($customfield.logFieldName)`';`r`n"
+                    $LogCustomFields += "    sourceName = `'$($customfield.sourceName)`';`r`n"
+                    $LogCustomFields += "`    sourceType = `'$($customfield.sourceType)`';`r`n"
                     $LogCustomFields += "}"
                 }
 
@@ -215,7 +216,7 @@ function Export-WebAdminRemoteDSC
 
                 foreach ($authenticationtype in $AuthenticationTypes)
                 {
-                    Remove-Variable -Name location -ErrorALogCustomFieldsction SilentlyContinue
+                    Remove-Variable -Name location -ErrorAction SilentlyContinue
                     Remove-Variable -Name prop -ErrorAction SilentlyContinue
                     $location = $website.Name
                     $prop = Get-WebConfigurationProperty `
@@ -223,7 +224,7 @@ function Export-WebAdminRemoteDSC
                         -Name enabled `
                         -Location $location
                     Write-Verbose "$authenticationtype : $($prop.Value)"
-                    $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + "`r`n"
+                    $AuthenticationInfo += "                $($authenticationtype.Replace('Authentication','')) = `$" + $prop.Value + ";`r`n"
                 }
 
                 $results.AuthenticationInfo = $AuthenticationInfo
@@ -232,11 +233,11 @@ function Export-WebAdminRemoteDSC
                 Write-Verbose "All Parameters with values"
                 $results | ConvertTo-Json | Write-Verbose
 
-                $LogContent += "        xWebSite " + (New-Guid).ToString() + "`r`n        {`r`n"
-                $LogContent += Get-DSCBlock -Params $results -ModulePath $module 
-                $LogContent += "        }`r`n"
+                $WebSiteContent += "        xWebSite " + (New-Guid).ToString() + "`r`n        {`r`n"
+                $WebSiteContent += Get-DSCBlock -Params $results -ModulePath $module 
+                $WebSiteContent += "        }`r`n"
             }
-            return $LogContent
+            return $WebSiteContent
         }
 
         $ReadWebVirtualDirectory = {    
@@ -263,7 +264,7 @@ function Export-WebAdminRemoteDSC
                         $params.WebApplication = ""
                         $params.Website = $website.Name
                         <# Setting Required Keys #>
-                        $params.PhysicalPath  = $webapplication.PhysicalPath
+                        $params.PhysicalPath  = $webvirtualdirectory.PhysicalPath
                         Write-Verbose "Key parameters as follows"
                         $params | ConvertTo-Json | Write-Verbose
                         
@@ -439,7 +440,7 @@ function Export-WebAdminRemoteDSC
         $dscConfigContent += $ReadWebApplicationHandler.invoke($DSCPath)
 
         Write-Host "$($ComputerName): Scanning IISFeatureDelegation..." -BackgroundColor DarkGreen -ForegroundColor White
-        $dscConfigContent += $ReadIISFeatureDelegation.invoke($DSCPath)
+        $dscConfigContent += $ReadIISFeatureDelegation.invoke("system.webServer/*",$DSCPath)
 
         Write-Host "$($ComputerName): Scanning IISLogging..." -BackgroundColor DarkGreen -ForegroundColor White
         $dscConfigContent += $ReadIISLogging.invoke($DSCPath)
