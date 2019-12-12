@@ -234,7 +234,7 @@ function Export-WebAdminRemoteDSC
                 $results | ConvertTo-Json | Write-Verbose
 
                 $WebSiteContent += "        xWebSite " + (New-Guid).ToString() + "`r`n        {`r`n"
-                $WebSiteContent += Get-DSCBlock -Params $results -ModulePath $module 
+                $WebSiteContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
                 $WebSiteContent += "        }`r`n"
             }
             return $WebSiteContent
@@ -485,7 +485,7 @@ function Export-WebAdminRemoteDSC
 
     do{
         Start-Sleep -Seconds 5
-        $jobsRunning = (Get-Job | Where-Object{$_.state -eq "Running" } ).count
+        $jobsRunning = (Get-Job | Where-Object{$_.state -ne "Completed" } ).count
         $jobsCompleted = (Get-Job | Where-Object{$_.state -eq "Completed" } ).count
         $jobsTotal = (Get-Job).count
         
