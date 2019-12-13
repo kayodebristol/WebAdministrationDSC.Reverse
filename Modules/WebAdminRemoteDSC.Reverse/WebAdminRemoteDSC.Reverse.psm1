@@ -69,6 +69,7 @@ function Export-WebAdminRemoteDSC
         $ReadWebApplicationHandler = {
             param($DSCPath)
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_WebApplicationHandler\MSFT_WebApplicationHandler.psm1")
+            $modulePath = ($DSCPath + "\DSCResources\MSFT_WebApplicationHandler\MSFT_WebApplicationHandler.psm1")
             Import-Module $module
             $params = Get-DSCFakeParameters -ModulePath $module
 
@@ -81,7 +82,7 @@ function Export-WebAdminRemoteDSC
                 $params.Location = $handler.location
                 $results = Get-TargetResource @params
                 $HandlerContent += "        WebApplicationHandler " + (New-Guid).ToString() + "`r`n        {`r`n"
-                $HandlerContent += Get-DSCBlock -Params $results -ModulePath $module 
+                $HandlerContent += Get-DSCBlock -Params $results -ModulePath $modulePath 
                 $HandlerContent += "        }`r`n"
             }
             return $HandlerContent
@@ -90,6 +91,7 @@ function Export-WebAdminRemoteDSC
         $ReadIISLogging = {
             param($DSCPath)
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xIISLogging\MSFT_xIISLogging.psm1")
+            $modulePath = ($DSCPath + "\DSCResources\MSFT_xIISLogging\MSFT_xIISLogging.psm1")
             Import-Module $module
             $params = Get-DSCFakeParameters -ModulePath $module
 
@@ -99,7 +101,7 @@ function Export-WebAdminRemoteDSC
             $results = Get-TargetResource @params
             $results.LogFlags = $results.LogFlags.Split(',')
             $LoggingContent += "        xIISLogging " + (New-Guid).ToString() + "`r`n        {`r`n"
-            $LoggingContent += Get-DSCBlock -Params $results -ModulePath $module 
+            $LoggingContent += Get-DSCBlock -Params $results -ModulePath $modulePath 
             $LoggingContent += "        }`r`n"
             return $LoggingContent
         }
@@ -108,26 +110,27 @@ function Export-WebAdminRemoteDSC
             param($path = "system.webServer/*", $DSCPath, $ReadIISFeatureDelegation)
     
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
+            $modulePath = ($DSCPath + "\DSCResources\MSFT_xIisFeatureDelegation\MSFT_xIisFeatureDelegation.psm1")
             Import-Module $module
-            $ConfigSections = Get-WebConfiguration -Filter $Path -Metadata -Recurse
+            $ConfigSections = Get-WebConfiguration -Filter $Path -Metadata 
 
             foreach ($section in $ConfigSections)
             {
                 $params = Get-DSCFakeParameters -ModulePath $module
-                $params.Filter = $section.SectionPath.Remove(0,1)
-                $params.Path = "MACHINE/WEBROOT/APPHOST"
+                if($null -ne $section.SectionPath){$params.Filter = $section.SectionPath.Remove(0,1)}
+                if($null -ne $section.PSPath){$params.Path = $section.PSPath}
                 $params.OverrideMode = "Allow"
 
                 try
                 {
                     $results = Get-TargetResource @params
                     $FeatureContent += "        xIISFeatureDelegation " + (New-Guid).ToString() + "`r`n        {`r`n"
-                    $FeatureContent += Get-DSCBlock -Params $results -ModulePath $module 
+                    $FeatureContent += Get-DSCBlock -Params $results -ModulePath $modulePath 
                     $FeatureContent += "        }`r`n"
 
             
                     $ChildPath = $section.SectionPath.Remove(0,1) + "/*"
-                    $ConfigSections = Get-WebConfiguration -Filter $ChildPath -Metadata -Recurse
+                    $ConfigSections = Get-WebConfiguration -Filter $ChildPath -Metadata 
                     if ($null -ne $ConfigSections)
                     {
                         $FeatureContent += $ReadIISFeatureDelegation.invoke($ChildPath, $DSCPath, $ReadIISFeatureDelegation)
@@ -142,6 +145,7 @@ function Export-WebAdminRemoteDSC
         $ReadWebsite = {    
             param($DSCPath)
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
+            $modulePath = ($DSCPath + "\DSCResources\MSFT_xWebsite\MSFT_xWebsite.psm1")
             Import-Module $module
             $params = Get-DSCFakeParameters -ModulePath $module
             
@@ -165,7 +169,7 @@ function Export-WebAdminRemoteDSC
                 foreach($binding in $website.Bindings.Collection)
                 {
                     $currentBinding = "MSFT_xWebBindingInformation`r`n            {`r`n"
-                    $currentBinding += "                Protocol = `'$($binding.Protocol)`'" + ";`r`n"
+                    $currentBinding += "                Protocol = `"$($binding.Protocol)`"" + ";`r`n"
                     $currentBinding += "                SslFlags = $($binding.sslFlags)" + ";`r`n"
 
                     if ($binding.protocol -match "^http")
@@ -174,21 +178,21 @@ function Export-WebAdminRemoteDSC
                         $ipAddress = $bindingInfo[0]
                         $port = $bindingInfo[1]
                         $hostName = $bindingInfo[2]
-                        $currentBinding += "                IPAddress = `'$ipAddress`'" + ";`r`n"
+                        $currentBinding += "                IPAddress = `"$ipAddress`"" + ";`r`n"
                         $currentBinding += "                Port = $port" + ";`r`n"
-                        $currentBinding += "                Hostname = `'$hostName`'" + ";`r`n"
+                        $currentBinding += "                Hostname = `"$hostName`"" + ";`r`n"
                         if ($binding.CertificateStoreName -eq "My" -or $binding.CertificateStoreName -eq "WebHosting")
                         {
                             if ($null -ne $binding.CertificateHash -and "" -ne $binding.CertificateHash)
                             {
-                                $currentBinding += "                CertificateThumbprint = `'$($binding.CertificateHash)`';`r`n"
+                                $currentBinding += "                CertificateThumbprint = `"$($binding.CertificateHash)`";`r`n"
                             }
-                            $currentBinding += "                CertificateStoreName = `'$($binding.CertificateStoreName)`';`r`n"     
+                            $currentBinding += "                CertificateStoreName = `"$($binding.CertificateStoreName)`";`r`n"     
                         }       
                     }
                     else
                     {
-                        $currentBinding += "                BindingInformation = `'$($binding.bindingInformation)`'" + ";`r`n"
+                        $currentBinding += "                BindingInformation = `"$($binding.bindingInformation)`"" + ";`r`n"
                     }
 
                     $currentBinding += "            }"
@@ -202,9 +206,9 @@ function Export-WebAdminRemoteDSC
                 foreach ($customfield in $webSite.logfile.customFields.Collection)
                 {   
                     $LogCustomFields += "`r`nMSFT_LogCustomFieldInformation`r`n{`r`n"
-                    $LogCustomFields += "    logFieldName = `'$($customfield.logFieldName)`';`r`n"
-                    $LogCustomFields += "    sourceName = `'$($customfield.sourceName)`';`r`n"
-                    $LogCustomFields += "`    sourceType = `'$($customfield.sourceType)`';`r`n"
+                    $LogCustomFields += "    logFieldName = `"$($customfield.logFieldName)`";`r`n"
+                    $LogCustomFields += "    sourceName = `"$($customfield.sourceName)`";`r`n"
+                    $LogCustomFields += "`    sourceType = `"$($customfield.sourceType)`";`r`n"
                     $LogCustomFields += "}"
                 }
 
@@ -234,7 +238,7 @@ function Export-WebAdminRemoteDSC
                 $results | ConvertTo-Json | Write-Verbose
 
                 $WebSiteContent += "        xWebSite " + (New-Guid).ToString() + "`r`n        {`r`n"
-                $WebSiteContent += Get-DSCBlock -Params $results -ModulePath $module -UseGetTargetResource
+                $WebSiteContent += Get-DSCBlock -Params $results -ModulePath $modulePath -UseGetTargetResource
                 $WebSiteContent += "        }`r`n"
             }
             return $WebSiteContent
@@ -243,6 +247,7 @@ function Export-WebAdminRemoteDSC
         $ReadWebVirtualDirectory = {    
             param($DSCPath)
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
+            $modulePath = ($DSCPath + "\DSCResources\MSFT_xWebVirtualDirectory\MSFT_xWebVirtualDirectory.psm1")
             Import-Module $module
 
             $webSites = Get-WebSite
@@ -274,7 +279,7 @@ function Export-WebAdminRemoteDSC
                         $results | ConvertTo-Json | Write-Verbose
 
                         $VirDirContent += "            xWebVirtualDirectory " + (New-Guid).ToString() + "`r`n            {`r`n"
-                        $VirDirContent += Get-DSCBlock -Params $results -ModulePath $module 
+                        $VirDirContent += Get-DSCBlock -Params $results -ModulePath $modulePath 
                         $VirDirContent += "            }`r`n"
                     }
                 }
@@ -285,7 +290,8 @@ function Export-WebAdminRemoteDSC
         $ReadWebApplication = {    
             param($DSCPath)
            $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
-            Import-Module $module
+           $modulePath = ($DSCPath + "\DSCResources\MSFT_xWebApplication\MSFT_xWebApplication.psm1")
+           Import-Module $module
  
             $webSites = Get-WebSite
 
@@ -341,7 +347,7 @@ function Export-WebAdminRemoteDSC
                         $results | ConvertTo-Json | Write-Verbose
 
                         $WebAppContent += "        xWebApplication " + (New-GUID).ToString() + "`r`n        {`r`n"
-                        $WebAppContent += Get-DSCBlock -Params $results -ModulePath $module
+                        $WebAppContent += Get-DSCBlock -Params $results -ModulePath $modulePath
                         $WebAppContent += "        }`r`n"
                         
                     }
@@ -353,6 +359,7 @@ function Export-WebAdminRemoteDSC
         $ReadWebAppPool = {    
             param($DSCPath)
             $module = Resolve-Path ($DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
+            $modulePath = ($DSCPath + "\DSCResources\MSFT_xWebAppPool\MSFT_xWebAppPool.psm1")
             Import-Module $module
             $params = Get-DSCFakeParameters -ModulePath $module
             
@@ -385,7 +392,7 @@ function Export-WebAdminRemoteDSC
 
                 $AppPoolContent += "`r`n"
                 $AppPoolContent += "        xWebAppPool " + (New-Guid).ToString() + "`r`n        {`r`n"
-                $AppPoolContent += Get-DSCBlock -Params $results -ModulePath $module 
+                $AppPoolContent += Get-DSCBlock -Params $results -ModulePath $modulePath 
                 $AppPoolContent += "        }`r`n"
             }
             return $AppPoolContent
@@ -440,7 +447,7 @@ function Export-WebAdminRemoteDSC
         $dscConfigContent += $ReadWebApplicationHandler.invoke($DSCPath)
 
         Write-Host "$($ComputerName): Scanning IISFeatureDelegation..." -BackgroundColor DarkGreen -ForegroundColor White
-        $dscConfigContent += $ReadIISFeatureDelegation.invoke("system.webServer/*",$DSCPath)
+        $dscConfigContent += $ReadIISFeatureDelegation.invoke("system.webServer/*",$DSCPath, $ReadIISFeatureDelegation)
 
         Write-Host "$($ComputerName): Scanning IISLogging..." -BackgroundColor DarkGreen -ForegroundColor White
         $dscConfigContent += $ReadIISLogging.invoke($DSCPath)
